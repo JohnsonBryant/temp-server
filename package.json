@@ -1,0 +1,22 @@
+{
+  "name": "temp-server",
+  "version": "1.0.0",
+  "description": "serialport vue element-ui echarts express websocket",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "温度监测系统"
+  ],
+  "author": "wenzheng yang (1966318133@qq.com)",
+  "license": "ISC",
+  "dependencies": {
+    "binary-parser": "^1.4.0",
+    "express": "^4.17.1",
+    "moment": "^2.24.0",
+    "serialport": "^7.1.5",
+    "socket.io": "^2.3.0"
+  }
+}
