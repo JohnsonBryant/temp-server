@@ -1,23 +1,26 @@
 'use strict'
 
+// http server , websocket server
 const express = require('express')
 const app = express()
 const http = require('http').Server(app)
 const io = require('socket.io')(http)
 const path = require('path')
 
-const myutil = require('./myutil')
-const SerialPort = require('serialport')
+let SqliteDB = require('./sqliteDB').SqliteDB
+let sqliteDB = new SqliteDB(path.join(__dirname, 'data.db'))
 
+const myutil = require('./myutil')
+const Packet = require('./packetParser.js')
 const Config = require('./config.json')
-const PortName = Config.SerialPortName
-const BaudRate = parseInt(Config.BaudRate)
 
 const EventEmitter = require('events').EventEmitter
 const _event = new EventEmitter()
 _event.setMaxListeners(10)
 
-const Packet = require('./packetParser.js')
+const PortName = Config.SerialPortName
+const BaudRate = parseInt(Config.BaudRate)
+const SerialPort = require('serialport')
 
 const Events = {
   parse: 'parse',
@@ -31,6 +34,36 @@ const ioEvent = {
   dataMsg: 'dataMsg',
   directiveMsg: 'directiveMsg'
 }
+
+// 数据库函数
+initDataTable()
+
+function initDataTable() {
+  // create equipment table
+  let createTableEm = `create table if not exists equipment(
+    id INTEGER PRIMARY KEY, company TEXT, em TEXT, deviceName TEXT, deviceType TEXT, deviceID TEXT, insertDate TEXT 
+  );`
+  // create test table
+  let testTable = `create table if not exists testTable(
+    id INTEGER PRIMARY KEY, company TEXT, em TEXT, deviceName TEXT, deviceType TEXT, deviceID TEXT, testDate TEXT, cycle INTEGER, temp REAL, humi REAL, centerID INTEGER, IDS TEXT
+  );
+  `
+  let sensorData = `create table if not exists sensorData(
+    id INTEGER PRIMARY KEY, sensorID INTERGER, temp REAL, humi REAL, stime TEXT
+  );
+  `
+  let testData = `create table if not exists testData(
+    id INTEGER PRIMARY KEY, evennessTemp REAL, fluctuationTemp REAL, deviationTemp REAL,
+    evennessHumi REAL, fluctuationHumi REAL, deviationHumi REAL, stime TEXT
+  );
+  `
+  sqliteDB.createTable(createTableEm)
+  sqliteDB.createTable(testTable)
+  sqliteDB.createTable(sensorData)
+  sqliteDB.createTable(testData)
+}
+
+
 
 // 串口
 let buf = Buffer.alloc(0)
