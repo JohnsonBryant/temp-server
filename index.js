@@ -1,26 +1,21 @@
 'use strict'
-
+const fs = require('fs')
+const path = require('path')
 // http server , websocket server
 const express = require('express')
 const app = express()
 const http = require('http').Server(app)
 const io = require('socket.io')(http)
-const path = require('path')
 
 let SqliteDB = require('./sqliteDB').SqliteDB
 let sqliteDB = new SqliteDB(path.join(__dirname, 'data.db'))
 
 const myutil = require('./myutil')
 const Packet = require('./packetParser.js')
-const Config = require('./config.json')
 
 const EventEmitter = require('events').EventEmitter
 const _event = new EventEmitter()
 _event.setMaxListeners(10)
-
-const PortName = Config.SerialPortName
-const BaudRate = parseInt(Config.BaudRate)
-const SerialPort = require('serialport')
 
 const Events = {
   parse: 'parse',
@@ -34,6 +29,24 @@ const ioEvent = {
   dataMsg: 'dataMsg',
   directiveMsg: 'directiveMsg'
 }
+
+// 目录及配置文件初始化检查
+function initDirectory(_fs, _path, dirname) {
+  // 检查 conf 目录是否存在，不存在，则创建 conf 目录，用于存放程序相关的 json 配置文件
+  let dirConf = _path.join(dirname, 'conf')
+  if ( !_fs.existsSync(dirConf) ) {
+    _fs.mkdirSync(dirConf)
+  }
+  // 检查所有的 json 配置文件
+
+}
+initDirectory(fs, path, __dirname)
+
+const Config = require('./conf/config.json')
+const PortName = Config.SerialPortName
+const BaudRate = parseInt(Config.BaudRate)
+const SerialPort = require('serialport')
+
 
 // 串口
 let buf = Buffer.alloc(0)

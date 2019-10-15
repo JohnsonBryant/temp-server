@@ -20,7 +20,7 @@ DB.SqliteDB = function(file){
     };
 
     this.initTable = initDataTable.bind(this)
-    this.initDataTable()
+    this.initTable()
 };
  
 DB.printErrorInfo = function(err){
