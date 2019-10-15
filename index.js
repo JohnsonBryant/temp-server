@@ -35,36 +35,6 @@ const ioEvent = {
   directiveMsg: 'directiveMsg'
 }
 
-// 数据库函数
-initDataTable()
-
-function initDataTable() {
-  // create equipment table
-  let createTableEm = `create table if not exists equipment(
-    id INTEGER PRIMARY KEY, company TEXT, em TEXT, deviceName TEXT, deviceType TEXT, deviceID TEXT, insertDate TEXT 
-  );`
-  // create test table
-  let testTable = `create table if not exists testTable(
-    id INTEGER PRIMARY KEY, company TEXT, em TEXT, deviceName TEXT, deviceType TEXT, deviceID TEXT, testDate TEXT, cycle INTEGER, temp REAL, humi REAL, centerID INTEGER, IDS TEXT
-  );
-  `
-  let sensorData = `create table if not exists sensorData(
-    id INTEGER PRIMARY KEY, sensorID INTERGER, temp REAL, humi REAL, stime TEXT
-  );
-  `
-  let testData = `create table if not exists testData(
-    id INTEGER PRIMARY KEY, evennessTemp REAL, fluctuationTemp REAL, deviationTemp REAL,
-    evennessHumi REAL, fluctuationHumi REAL, deviationHumi REAL, stime TEXT
-  );
-  `
-  sqliteDB.createTable(createTableEm)
-  sqliteDB.createTable(testTable)
-  sqliteDB.createTable(sensorData)
-  sqliteDB.createTable(testData)
-}
-
-
-
 // 串口
 let buf = Buffer.alloc(0)
 const serialport = new SerialPort(PortName, {

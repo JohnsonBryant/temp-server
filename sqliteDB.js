@@ -18,6 +18,9 @@ DB.SqliteDB = function(file){
         console.log("Creating db file!");
         fs.openSync(file, 'w');
     };
+
+    this.initTable = initDataTable.bind(this)
+    this.initDataTable()
 };
  
 DB.printErrorInfo = function(err){
@@ -72,6 +75,36 @@ DB.SqliteDB.prototype.executeSql = function(sql){
 DB.SqliteDB.prototype.close = function(){
     DB.db.close();
 };
- 
+
+// 初始化数据库
+function initDataTable() {
+    // 创建测试设备表
+    let createTableEm = `create table if not exists equipment(
+      id INTEGER PRIMARY KEY, company TEXT, em TEXT, deviceName TEXT, deviceType TEXT, deviceID TEXT, insertDate TEXT 
+    );`
+    
+    // 创建测试记录表
+    let testRecords = `create table if not exists testRecords(
+      id INTEGER PRIMARY KEY, company TEXT, em TEXT, deviceName TEXT, deviceType TEXT, deviceID TEXT, testDate TEXT, cycle INTEGER, temp REAL, humi REAL, centerID INTEGER, IDS TEXT
+    );`
+
+    // 创建传感器数据表，表关联： sensorData.test_id = testRecords.id
+    let sensorData = `create table if not exists sensorData(
+      id INTEGER PRIMARY KEY, sensorID INTERGER, temp REAL, humi REAL, stime TEXT, test_id INTEGER
+    );`
+    
+    // 创建测试数据表（温度、湿度（均匀度、波动度、偏差）），表关联： testData.test_id = testRecords.id
+    let testData = `create table if not exists testData(
+      id INTEGER PRIMARY KEY, evennessTemp REAL, fluctuationTemp REAL, deviationTemp REAL,
+      evennessHumi REAL, fluctuationHumi REAL, deviationHumi REAL, stime TEXT, test_id INTEGER
+    );`
+
+    this.createTable(createTableEm)
+    this.createTable(testRecords)
+    this.createTable(sensorData)
+    this.createTable(testData)
+  }
+  
+
 /// export SqliteDB.
 module.exports.SqliteDB = DB.SqliteDB;
