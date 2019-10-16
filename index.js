@@ -1,65 +1,34 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
-// http server , websocket server
+const jsonfile = require('jsonfile')
 const express = require('express')
 const app = express()
 const http = require('http').Server(app)
 const io = require('socket.io')(http)
-
-let SqliteDB = require('./sqliteDB').SqliteDB
-let sqliteDB = new SqliteDB(path.join(__dirname, 'data.db'))
-
-const myutil = require('./myutil')
-const Packet = require('./packetParser.js')
-
-const EventEmitter = require('events').EventEmitter
-const _event = new EventEmitter()
-_event.setMaxListeners(10)
-
-const Events = {
-  parse: 'parse',
-  dataMsg: 'dataMsg',
-  directiveMsg: 'directiveMsg'
-}
-
-const ioEvent = {
-  connection: 'connection',
-  connectMsg: 'connectMsg',
-  dataMsg: 'dataMsg',
-  directiveMsg: 'directiveMsg'
-}
-
-// 目录及配置文件初始化检查
-function initDirectory(_fs, _path, dirname) {
-  // 检查 conf 目录是否存在，不存在，则创建 conf 目录，用于存放程序相关的 json 配置文件
-  let dirConf = _path.join(dirname, 'conf')
-  if ( !_fs.existsSync(dirConf) ) {
-    _fs.mkdirSync(dirConf)
-  }
-  // 检查所有的 json 配置文件
-
-}
-initDirectory(fs, path, __dirname)
-
-const Config = require('./conf/config.json')
-const PortName = Config.SerialPortName
-const BaudRate = parseInt(Config.BaudRate)
+const bodyParser = require('body-parser')
 const SerialPort = require('serialport')
+let SqliteDB = require('./sqliteDB').SqliteDB
 
+const util = require('./myutil.js') // 程序关键配置参数，功能函数，初始化函数
+const Packet = require('./packetParser.js') // 数据解析模板
+let sqliteDB = new SqliteDB(path.join(__dirname, 'data.db')) // 数据对象，封装必要功能函数
+
+util.initConf() // 程序配置目录及文件初始化检查 / 生成
+const Config = require('./conf/config.json')
 
 // 串口
 let buf = Buffer.alloc(0)
-const serialport = new SerialPort(PortName, {
-  baudRate: BaudRate
+const serialport = new SerialPort(Config.SerialPortName, {
+  baudRate: parseInt(Config.BaudRate)
 })
 // 打开串口
 serialport.open(() => {
-  serialport.write(`Open serialport ${PortName} successed!`)
+  serialport.write(`Open serialport ${Config.SerialPortName} successed!`)
 })
 // 串口错误
 serialport.on('error', (message) => {
-  console.log(myutil.nowtime(), message)
+  console.log(util.nowtime(), message)
 })
 // 串口数据接收
 serialport.on('data', (data) => {
@@ -99,7 +68,7 @@ const processbuf = function () {
     // }
 
     // if (checksum === packbuf.readUInt16BE(packlen - 2)) {
-      _event.emit(Events.parse, packbuf)
+      util._event.emit(util.AppEvents.parse, packbuf)
     // }
 
     let remainlen = buf.length - packlen - idx
@@ -111,42 +80,58 @@ const processbuf = function () {
   }
 }
 // 串口数据解析，通过事件分发到其他处理过程
-_event.on(Events.parse, (packbuf) => {
+util._event.on(util.AppEvents.parse, (packbuf) => {
   if (packbuf.readUInt8(2) === 0xD1) {
     // 传感器数据
     let DataPack = Packet.DataPackParser.parse(packbuf)
     
-    _event.emit(Events.dataMsg, DataPack)
+    util._event.emit(util.AppEvents.dataMsg, DataPack)
   }
   else {
     // 传感器指令
     let DirectivePack = Packet.DirectivePackParser.parse(packbuf)
 
-    _event.emit(Events.directiveMsg, DirectivePack)
+    util._event.emit(util.AppEvents.directiveMsg, DirectivePack)
   }
 })
 
+
 // webserver
+app.use(bodyParser.json()); // support json encoded bodies
+app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
 app.use('/', express.static(path.join(__dirname, '../client/dist')))
-// 首页 index.html
-app.get('/', (req, res) => {
-  res.sendFile('/index.html')
-})
 // HTTP 侦听
 http.listen(8080, () => {
   let host = http.address().address
   let port = http.address().port
-  console.log(myutil.nowtime(), `webserver listening at ${host}:${port}`)
+  console.log(util.nowtime(), `webserver listening at ${host}:${port}`)
 })
+// 路由到 index.html
+app.get('/', (req, res) => {
+  res.sendFile('/index.html')
+})
+// 处理串口信息配置
+// app.post('/serialportConf/get', function (req, res) {
+//   let config = jsonfile.readFileSync(util.confPathList[1])
+//   res.send({
+//     SerialPortName: config.SerialPortName ,
+//     BaudRate: config.BaudRate 
+//   })
+// });
+// app.post('/serialportConf/set', function (req, res) {
+//   console.log(req)
+//   res.send("success")
+// });
 // websocket server 连接事件
-io.on(ioEvent.connection, (socket) => {
-  io.emit(ioEvent.connectMsg, `you have connectted with websocket server, please waiting for message update!`)
+io.on(util.ioEvent.connection, (socket) => {
+  io.emit(util.ioEvent.connectMsg, `you have connectted with websocket server, please waiting for message update!`)
 })
-// 上报传感器数据消息 到websocket客户端
-_event.on(Events.dataMsg, (pack) => {
-  io.emit(ioEvent.dataMsg, pack)
+
+// 自定义event对象绑定事件， 上报传感器数据消息 到websocket客户端
+util._event.on(util.AppEvents.dataMsg, (pack) => {
+  io.emit(util.ioEvent.dataMsg, pack)
 })
-// 上报传感器指令消息 到websocket客户端
-_event.on(Events.directiveMsg, (pack) => {
-  io.emit(ioEvent.directiveMsg, pack)
+// 自定义event对象绑定事件， 上报传感器指令消息 到websocket客户端
+util._event.on(util.AppEvents.directiveMsg, (pack) => {
+  io.emit(util.ioEvent.directiveMsg, pack)
 })
