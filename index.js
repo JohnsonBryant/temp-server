@@ -125,6 +125,8 @@ app.get('/config/get', function (req, res) {
 });
 // 修改串口配置信息 接口
 app.post('/serialportConf/set', function (req, res) {
+  // 数据检查
+
   let confRecv = {
     SerialPortName: req.body.SerialPortName,
     BaudRate: parseInt(req.body.BaudRate)
@@ -136,6 +138,8 @@ app.post('/serialportConf/set', function (req, res) {
 });
 // 修改电池电量参数 接口
 app.post('/batteryConf/set', function (req, res) {
+  // 数据检查
+  
   let confRecv = {
     BatteryLow: parseFloat(req.body.BatteryLow),
     BatteryHigh: parseFloat(req.body.BatteryHigh)
@@ -158,6 +162,8 @@ app.get('/testTemplate/get', function (req, res) {
 });
 // 修改测试模板信息 接口
 app.post('/testTemplate/set', function (req, res) {
+  // 数据检查
+  
   let confRecv = {
     cycle: parseInt(req.body.cycle) ,
     temp: parseFloat(req.body.temp),
@@ -170,6 +176,24 @@ app.post('/testTemplate/set', function (req, res) {
   let response = {"isSuccessed": result}
   res.send(response)
 });
+// 搜索传感器 接口
+app.get('/searchSensor', (req, res) => {
+  // 数据检查
+  
+  // 接收到前端请求后，调用串口发送数据到主节点(确认数据包格式)
+
+  res.send(response = {"isSuccessed": true})
+})
+// 修改传感器ID
+app.post('/idSet', (req, res) => {
+  // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，调用串口发送数据到主节点
+  let idSetting = {
+    originID: res.body.originID,
+    newID: res.body.newID
+  }
+
+  res.send(response = {"isSuccessed": true})
+})
 
 
 
