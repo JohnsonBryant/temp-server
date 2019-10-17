@@ -12,10 +12,11 @@ let SqliteDB = require('./sqliteDB').SqliteDB
 
 const util = require('./myutil.js') // 程序关键配置参数，功能函数，初始化函数
 const Packet = require('./packetParser.js') // 数据解析模板
-let sqliteDB = new SqliteDB(path.join(__dirname, 'data.db')) // 数据对象，封装必要功能函数
+const sqliteDB = new SqliteDB(path.join(__dirname, 'data.db')) // 数据对象，封装必要功能函数
 
 util.initConf() // 程序配置目录及文件初始化检查 / 生成
-const Config = require('./conf/config.json')
+let Config = require('./conf/config.json')
+
 
 // 串口
 let buf = Buffer.alloc(0)
@@ -97,7 +98,7 @@ util._event.on(util.AppEvents.parse, (packbuf) => {
 
 
 // webserver
-app.use(bodyParser.json()); // support json encoded bodies
+// app.use(bodyParser.json()); // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
 app.use('/', express.static(path.join(__dirname, '../client/dist')))
 // HTTP 侦听
@@ -106,32 +107,81 @@ http.listen(8080, () => {
   let port = http.address().port
   console.log(util.nowtime(), `webserver listening at ${host}:${port}`)
 })
+
 // 路由到 index.html
 app.get('/', (req, res) => {
   res.sendFile('/index.html')
 })
-// 处理串口信息配置
-// app.post('/serialportConf/get', function (req, res) {
-//   let config = jsonfile.readFileSync(util.confPathList[1])
-//   res.send({
-//     SerialPortName: config.SerialPortName ,
-//     BaudRate: config.BaudRate 
-//   })
-// });
-// app.post('/serialportConf/set', function (req, res) {
-//   console.log(req)
-//   res.send("success")
-// });
-// websocket server 连接事件
+
+// 获取配置信息（串口参数、电池参数） 接口
+app.get('/config/get', function (req, res) {
+  let config = jsonfile.readFileSync(util.confPathList[1])
+  res.send({
+    SerialPortName: config.SerialPortName ,
+    BaudRate: parseInt(config.BaudRate),
+    BatteryLow: parseFloat(config.BatteryLow),
+    BatteryHigh: parseFloat(config.BatteryHigh),
+  })
+});
+// 修改串口配置信息 接口
+app.post('/serialportConf/set', function (req, res) {
+  let confRecv = {
+    SerialPortName: req.body.SerialPortName,
+    BaudRate: parseInt(req.body.BaudRate)
+  }
+  // 保存到配置文件 conf/config.json
+  let result = util.saveJsonToConf(confRecv, util.confPathList[1])
+  let response = {"isSuccessed": result}
+  res.send(response)
+});
+// 修改电池电量参数 接口
+app.post('/batteryConf/set', function (req, res) {
+  let confRecv = {
+    BatteryLow: parseFloat(req.body.BatteryLow),
+    BatteryHigh: parseFloat(req.body.BatteryHigh)
+  }
+  // 保存到配置文件 conf/config.json
+  let result = util.saveJsonToConf(confRecv, util.confPathList[1])
+  let response = {"isSuccessed": result}
+  res.send(response)
+});
+// 获取测试模板信息 接口
+app.get('/testTemplate/get', function (req, res) {
+  let testTemplate = jsonfile.readFileSync(util.confPathList[2])
+  res.send({
+    cycle: parseInt(testTemplate.cycle),
+    temp: parseFloat(testTemplate.temp),
+    humi: parseFloat(testTemplate.humi),
+    centerID: parseInt(testTemplate.centerID),
+    IDS: testTemplate.IDS,
+  })
+});
+// 修改测试模板信息 接口
+app.post('/testTemplate/set', function (req, res) {
+  let confRecv = {
+    cycle: parseInt(req.body.cycle) ,
+    temp: parseFloat(req.body.temp),
+    humi: parseFloat(req.body.humi),
+    centerID: parseInt(req.body.centerID),
+    IDS: req.body.IDS,
+  }
+  // 保存到配置文件 conf/config.json
+  let result = util.saveJsonToConf(confRecv, util.confPathList[2])
+  let response = {"isSuccessed": result}
+  res.send(response)
+});
+
+
+
+// websocket server 客户端连接事件，下发连接成功提示到客户端
 io.on(util.ioEvent.connection, (socket) => {
   io.emit(util.ioEvent.connectMsg, `you have connectted with websocket server, please waiting for message update!`)
 })
-
-// 自定义event对象绑定事件， 上报传感器数据消息 到websocket客户端
+// 自定义event对象绑定事件， 下发传感器数据消息 到客户端
 util._event.on(util.AppEvents.dataMsg, (pack) => {
   io.emit(util.ioEvent.dataMsg, pack)
 })
-// 自定义event对象绑定事件， 上报传感器指令消息 到websocket客户端
+// 自定义event对象绑定事件， 下发传感器指令消息 到客户端
 util._event.on(util.AppEvents.directiveMsg, (pack) => {
   io.emit(util.ioEvent.directiveMsg, pack)
 })

@@ -81,11 +81,29 @@ function initConf() {
   })
 }
 
+function saveJsonToConf(objInput, filePath) {
+  let ret = true
+  // 读取配置文件，获取当前配置信息的 JSON对象
+  if (!fs.existsSync(filePath)) {
+    ret = false
+    return
+  }
+  let confOrigin = jsonfile.readFileSync(filePath)
+  // 遍历入参对象，更新当前配置信息的 JSON对象
+  Object.keys(objInput).forEach((key) => {
+    confOrigin[key] = objInput[key]
+  })
+  // 保存新的配置信息的 JSON对象到文件
+  jsonfile.writeFileSync(filePath, confOrigin)
+  return ret
+}
+
 module.exports = {
   _event,
   AppEvents,
   ioEvent,
   nowtime,
   initConf,
-  confPathList
+  confPathList,
+  saveJsonToConf
 }
