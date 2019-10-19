@@ -96,10 +96,10 @@ util._event.on(util.AppEvents.parse, (packbuf) => {
   }
 })
 
-
-// webserver
-// app.use(bodyParser.json()); // support json encoded bodies
+// 添加路由中间件，解析JSON、 encoded 数据
+app.use(bodyParser.json()); // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
+// webserver
 app.use('/', express.static(path.join(__dirname, '../client/dist')))
 // HTTP 侦听
 http.listen(8080, () => {
@@ -126,7 +126,7 @@ app.get('/config/get', function (req, res) {
 // 修改串口配置信息 接口
 app.post('/serialportConf/set', function (req, res) {
   // 数据检查
-
+  
   let confRecv = {
     SerialPortName: req.body.SerialPortName,
     BaudRate: parseInt(req.body.BaudRate)
@@ -182,17 +182,17 @@ app.get('/searchSensor', (req, res) => {
   
   // 接收到前端请求后，调用串口发送数据到主节点(确认数据包格式)
 
-  res.send(response = {"isSuccessed": true})
+  res.send({"isSuccessed": true})
 })
 // 修改传感器ID
 app.post('/idSet', (req, res) => {
   // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，调用串口发送数据到主节点
   let idSetting = {
-    originID: res.body.originID,
-    newID: res.body.newID
+    originID: req.body.originID,
+    newID: req.body.newID
   }
 
-  res.send(response = {"isSuccessed": true})
+  res.send({"isSuccessed": true})
 })
 
 
