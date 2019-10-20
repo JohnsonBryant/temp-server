@@ -158,6 +158,7 @@ app.get('/testTemplate/get', function (req, res) {
     humi: parseFloat(testTemplate.humi),
     centerID: parseInt(testTemplate.centerID),
     IDS: testTemplate.IDS,
+    isSendding: testTemplate.isSendding,
   })
 });
 // 修改测试模板信息 接口
@@ -170,6 +171,7 @@ app.post('/testTemplate/set', function (req, res) {
     humi: parseFloat(req.body.humi),
     centerID: parseInt(req.body.centerID),
     IDS: req.body.IDS,
+    isSendding: req.body.isSendding,
   }
   // 保存到配置文件 conf/config.json
   let result = util.saveJsonToConf(confRecv, util.confPathList[2])

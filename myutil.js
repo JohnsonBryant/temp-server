@@ -58,7 +58,8 @@ const confList = [
       temp: 20,
       humi: 50,
       centerID: 1,
-      IDS: "2,3"
+      IDS: "2,3",
+      isSendding: true
     } 
   }  
 ]
