@@ -197,6 +197,42 @@ app.post('/idSet', (req, res) => {
   res.send({"isSuccessed": true})
 })
 
+// 获取所有委托单位信息
+app.get('/getAllCompanys', (req, res) => {
+  // 接收到前端请求后，从数据表（测试设备）中，查询所有委托单位信息
+  sqliteDB.queryData('select distinct company from equipment limit 5', (rows) => {
+    res.send(rows)
+  })
+})
+
+// 获取最近五条测试设备数据接口
+app.get('/lastestFiveTestEq', (req, res) => {
+  // 接收到前端请求后，从数据表（测试设备）中，查询最近插入的五条测试设备信息，返回给前端
+  sqliteDB.queryData('select * from equipment order by insertDate desc limit 5', (rows) => {
+    res.send(rows)
+  })
+})
+
+// 插入测试设备数据接口
+app.post('/addEquipment', (req, res) => {
+  // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，将测试设备信息存储到测试设备表中
+  // 单条记录写入 / 多条记录批量写入
+  let equipmentInfo = []
+  req.body.forEach((item) => {
+    equipmentInfo.push([item.company,
+      item.em,
+      item.deviceName,
+      item.deviceType,
+      item.deviceID,
+      item.insertDate
+    ])
+  })
+
+  // 数据写入结果的监测，及返回结果的调整
+  sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?)', equipmentInfo)
+
+  res.send({"isSuccessed": true})
+})
 
 
 // websocket server 客户端连接事件，下发连接成功提示到客户端
