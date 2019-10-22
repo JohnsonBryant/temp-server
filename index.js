@@ -197,10 +197,18 @@ app.post('/idSet', (req, res) => {
   res.send({"isSuccessed": true})
 })
 
-// 获取所有委托单位信息
-app.get('/getAllCompanys', (req, res) => {
+// 获取最近5条委托单位信息
+app.get('/getLastestFiveCompanys', (req, res) => {
   // 接收到前端请求后，从数据表（测试设备）中，查询所有委托单位信息
-  sqliteDB.queryData('select distinct company from equipment limit 5', (rows) => {
+  sqliteDB.queryData('select distinct company from equipment order by id desc limit 5;', (rows) => {
+    res.send(rows)
+  })
+})
+
+// 获取所有包含指定关键字的所有委托单位信息
+app.post('/getAllLikelyCompanys', (req, res) => {
+  // 接收到前端请求后，从数据表（测试设备）中，查询所有委托单位信息
+  sqliteDB.queryData(`select distinct company from equipment where company like %${req.body.company}%;`, (rows) => {
     res.send(rows)
   })
 })
@@ -208,7 +216,7 @@ app.get('/getAllCompanys', (req, res) => {
 // 获取最近五条测试设备数据接口
 app.get('/lastestFiveTestEq', (req, res) => {
   // 接收到前端请求后，从数据表（测试设备）中，查询最近插入的五条测试设备信息，返回给前端
-  sqliteDB.queryData('select * from equipment order by insertDate desc limit 5', (rows) => {
+  sqliteDB.queryData('select * from equipment order by insertDate desc limit 5;', (rows) => {
     res.send(rows)
   })
 })
@@ -229,7 +237,7 @@ app.post('/addEquipment', (req, res) => {
   })
 
   // 数据写入结果的监测，及返回结果的调整
-  sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?)', equipmentInfo)
+  sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);', equipmentInfo)
 
   res.send({"isSuccessed": true})
 })
