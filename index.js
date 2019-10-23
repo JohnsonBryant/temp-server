@@ -225,21 +225,29 @@ app.get('/lastestFiveTestEq', (req, res) => {
 app.post('/addEquipment', (req, res) => {
   // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，将测试设备信息存储到测试设备表中
   // 单条记录写入 / 多条记录批量写入
-  let equipmentInfo = []
+  let equipmentInfos = []
   req.body.forEach((item) => {
-    equipmentInfo.push([item.company,
+    equipmentInfos.push([item.company,
       item.em,
       item.deviceName,
       item.deviceType,
       item.deviceID,
       item.insertDate
-    ])
-  })
+    ]);
+  });
 
   // 数据写入结果的监测，及返回结果的调整
-  sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);', equipmentInfo)
-
-  res.send({"isSuccessed": true})
+  let result = {'isSuccessed': true, errorMessage: '', errorEquipmentInfo: []}
+  equipmentInfos.forEach((item) => {  
+    let equipmentInfo = [item]
+    let insertResult = sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);', equipmentInfo);
+    if (!insertResult) {
+      result['isSuccessed'] = false;
+      result['errorMessage'] = '设备已经添加到系统，请勿重复添加！';
+      result['errorEquipmentInfo'].push();
+    }
+  });
+  res.send(result);
 })
 
 

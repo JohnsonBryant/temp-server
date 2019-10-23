@@ -40,14 +40,20 @@ DB.SqliteDB.prototype.createTable = function(sql){
  
 /// tilesData format; [[level, column, row, content], [level, column, row, content]]
 DB.SqliteDB.prototype.insertData = function(sql, objects){
-    DB.db.serialize(function(){
-        var stmt = DB.db.prepare(sql);
-        for(var i = 0; i < objects.length; ++i){
-            stmt.run(objects[i]);
-        }
-    
-        stmt.finalize();
-    });
+    let ret = true;
+    try {
+        DB.db.serialize(function(){
+            var stmt = DB.db.prepare(sql);
+            for(var i = 0; i < objects.length; ++i){
+                stmt.run(objects[i]);
+            }
+        
+            stmt.finalize();
+        });
+    } catch {
+        ret = false;
+    }
+    return ret;
 };
  
 DB.SqliteDB.prototype.queryData = function(sql, callback){
@@ -80,7 +86,8 @@ DB.SqliteDB.prototype.close = function(){
 function initDataTable() {
     // 创建测试设备表
     let createTableEm = `create table if not exists equipment(
-      id INTEGER PRIMARY KEY, company TEXT NOT NULL, em TEXT NOT NULL, deviceName TEXT NOT NULL, deviceType TEXT NOT NULL, deviceID TEXT NOT NULL, insertDate TEXT NOT NULL
+      id INTEGER PRIMARY KEY, company TEXT NOT NULL, em TEXT NOT NULL, deviceName TEXT NOT NULL, deviceType TEXT NOT NULL, deviceID TEXT NOT NULL, insertDate TEXT NOT NULL,
+      UNIQUE(company,em,deviceName,deviceType,deviceID)
     );`
     
     // 创建测试记录表
