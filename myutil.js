@@ -11,14 +11,17 @@ _event.setMaxListeners(10)
 const AppEvents = {
   parse: 'parse',
   dataMsg: 'dataMsg',
-  directiveMsg: 'directiveMsg'
+  directiveMsg: 'directiveMsg',
 }
 
 const ioEvent = {
   connection: 'connection',
   connectMsg: 'connectMsg',
   dataMsg: 'dataMsg',
-  directiveMsg: 'directiveMsg'
+  directiveStartTest: 'directiveStartTest',
+  directiveStopTest: 'directiveStopTest',
+  directiveModifyID: 'directiveModifyID',
+  directiveSearchSensors: 'directiveSearchSensors',
 }
 
 
@@ -46,15 +49,15 @@ const confList = [
     data: {
       SerialPortName: "COM10",
       BaudRate: 115200,
-      BatteryLow: 2.8,
-      BatteryHigh: 3.5
+      BatteryLow: 3.3,
+      BatteryHigh: 7.2
     }
   },
   {
     path: confPathList[2],
     type: "json",
     data: {
-      cycle: 10,
+      cycle: 120,
       temp: 20,
       humi: 50,
       centerID: 1,
