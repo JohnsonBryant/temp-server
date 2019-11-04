@@ -30,14 +30,25 @@ function nowtime ()
   return moment().format('YYYY-MM-DD HH:mm:ss.SSS')
 }
 
+function nowDate () 
+{
+  return moment().format('YYYY-MM-DD')
+}
+
 
 // 配置程序 json 配置文件路径，及必要时初始化默认配置文件
 const confPathList = [
   path.join(__dirname, 'conf'),
   path.join(__dirname, 'conf/config.json'),
-  path.join(__dirname, 'conf/testTemplate.json')
+  path.join(__dirname, 'conf/testTemplate.json'),
+  path.join(__dirname, 'log'),
 ]
 const confList = [
+  {
+    path: confPathList[3],
+    type: "dir",
+    data: null
+  },
   {
     path: confPathList[0],
     type: "dir",
@@ -107,6 +118,7 @@ module.exports = {
   AppEvents,
   ioEvent,
   nowtime,
+  nowDate,
   initConf,
   confPathList,
   saveJsonToConf

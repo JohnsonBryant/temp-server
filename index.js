@@ -3,23 +3,50 @@ const fs = require('fs');
 const path = require('path');
 const jsonfile = require('jsonfile');
 const express = require('express');
-const app = express();
-const http = require('http').Server(app);
-const io = require('socket.io')(http);
+const http = require('http');
+const socketIo = require('socket.io');
 const bodyParser = require('body-parser');
 const SerialPort = require('serialport');
-let SqliteDB = require('./sqliteDB').SqliteDB;
-
+const { Console } = require('console');
 const util = require('./myutil.js'); // 程序关键配置参数，功能函数，初始化函数
+let SqliteDB = require('./sqliteDB').SqliteDB;
 const Packet = require('./packetParser.js'); // 数据解析模板
-const sqliteDB = new SqliteDB(path.join(__dirname, 'data.db')); // 数据对象，封装必要功能函数
 
 util.initConf(); // 程序配置目录及文件初始化检查 / 生成
-let Config = require('./conf/config.json');
-
+// 全局参数变量
+const output = fs.createWriteStream(path.join(__dirname, `log/log${util.nowDate()}.log`));
+const errOutput = fs.createWriteStream(path.join(__dirname, `log/errLog${util.nowDate()}.log`));
+const loger = new Console({stdout: output, stderr: errOutput});
+const sqliteDB = new SqliteDB(path.join(__dirname, 'data.db')); // 数据库对象，封装必要功能函数
+const app = express(); // express app object
+const httpServer = http.Server(app); // http server
+const io = socketIo(httpServer); // websocket server
+const Config = require('./conf/config.json'); // main config of program
+let buf = Buffer.alloc(0); // main data buffer
+let program = {
+  isOnTest: false,
+  cycle: '',
+  isSendding: true,
+  equipments: [
+    // {
+    //   device: {
+    //     company: '',
+    //     em: '',
+    //     deviceName: '',
+    //     deviceType: '',
+    //     deviceID: '',
+    //   },
+    //   config: {
+    //     temp: '',
+    //     humi: '',
+    //     centerID: '',
+    //     IDS: '',
+    //   }
+    // }
+  ]
+};
 
 // 串口
-let buf = Buffer.alloc(0);
 const serialport = new SerialPort(Config.SerialPortName, {
   baudRate: parseInt(Config.BaudRate)
 });
@@ -29,7 +56,7 @@ serialport.open(() => {
 });
 // 串口错误
 serialport.on('error', (message) => {
-  console.log(util.nowtime(), message);
+  loger.error(util.nowtime(), message);
 });
 // 串口数据接收
 serialport.on('data', (data) => {
@@ -76,9 +103,9 @@ const processbuf = function () {
 // 串口数据解析，通过事件分发到其他处理过程
 util._event.on(util.AppEvents.parse, (packbuf) => {
   if (packbuf.readUInt8(2) === 0xD1) {
-    // 传感器数据
+    // 接收到传感器数据
     let DataPack = Packet.DataPackParser.parse(packbuf);
-    
+    // 系统是否在测试中，传感器ID是否对应测试中的某个仪器，
     util._event.emit(util.AppEvents.dataMsg, DataPack);
   } else {
     // 传感器指令
@@ -93,11 +120,12 @@ app.use(bodyParser.json()); // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
 // webserver
 app.use('/', express.static(path.join(__dirname, '../client/dist')));
-// HTTP 侦听
-http.listen(8080, () => {
-  let host = http.address().address;
-  let port = http.address().port;
+// httpServer 侦听
+httpServer.listen(8080, () => {
+  let host = httpServer.address().address;
+  let port = httpServer.address().port;
   console.log(util.nowtime(), `webserver listening at ${host}:${port}`);
+  loger.log(util.nowtime(), `webserver listening at ${host}:${port}`);
 });
 
 // 路由到 index.html
@@ -284,7 +312,7 @@ function directiveAction(command) {
   };
 
   if (typeof commands[command] !== 'function') {
-    console.log('无效的数据指令字节 ' + command + ' !!!');
+    loger.log('无效的数据指令字节 ' + command + ' !!!');
   }
 
   commands[command]();
