@@ -24,7 +24,7 @@ DB.SqliteDB = function(file){
 };
  
 DB.printErrorInfo = function(err){
-    console.log("Error Message:" + err.message + " ErrorNumber:" + errno);
+    console.log("Error Message:" + err.message + " ErrorNumber:");
 };
  
 DB.SqliteDB.prototype.createTable = function(sql){
@@ -40,20 +40,14 @@ DB.SqliteDB.prototype.createTable = function(sql){
  
 /// tilesData format; [[level, column, row, content], [level, column, row, content]]
 DB.SqliteDB.prototype.insertData = function(sql, objects){
-    let ret = true;
-    try {
-        DB.db.serialize(function(){
-            var stmt = DB.db.prepare(sql);
-            for(var i = 0; i < objects.length; ++i){
-                stmt.run(objects[i]);
-            }
-        
-            stmt.finalize();
-        });
-    } catch {
-        ret = false;
-    }
-    return ret;
+    DB.db.serialize(function(){
+        var stmt = DB.db.prepare(sql);
+        for(var i = 0; i < objects.length; ++i){
+            stmt.run(objects[i]);
+        }
+
+        stmt.finalize();
+    });
 };
  
 DB.SqliteDB.prototype.queryData = function(sql, callback){

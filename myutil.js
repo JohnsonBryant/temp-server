@@ -113,6 +113,55 @@ function saveJsonToConf(objInput, filePath) {
   return ret
 }
 
+/**
+ * HTTP 请求返回结果的模板构造函数
+ * @param isSuccess 接收参数类型 bool 值, 标识操作是否成功，默认参数 true
+ * @param message 操作提示消息，默认参数为 ''
+ * @return 模板的示例对象
+ */
+function ResponseTemplate(isSuccess = true, message = '') {
+  if (new.target !== ResponseTemplate) {
+    return new ResponseTemplate();
+  }
+  this.isSuccess = typeof isSuccess === 'boolean' ? 
+    isSuccess : 
+    true
+  ;
+  this.message = typeof message === 'string' ? 
+    message : 
+    message.toString()
+  ;
+}
+
+/**
+ * 检查参数是否为整数值
+ * @param obj 任意类型值
+ * @return bool， 表示参数 obj 是否为整数
+ */
+function isInteger(obj) {
+  return typeof obj === 'number' && obj % 1 === 0;
+}
+
+/**
+ * 检查参数是否为正数
+ * @param obj 应传入数值型, 传入非数值参数一定返回false
+ * @return bool， 表示参数 obj 是否为正数
+ */
+function isPositiveNumber(obj) {
+  return typeof obj === 'number' && !isNaN(obj) && obj >= 0;
+}
+
+
+/**
+ * 检查参数是否为有效数值
+ * @param obj 应传入数值型, 传入非数值参数一定返回false
+ * @return bool， 表示参数 obj 是否为有效数值
+ */
+function isValidNumber(obj) {
+  return typeof obj === 'number' && !isNaN(obj);
+}
+
+
 module.exports = {
   _event,
   AppEvents,
@@ -121,5 +170,8 @@ module.exports = {
   nowDate,
   initConf,
   confPathList,
-  saveJsonToConf
+  saveJsonToConf,
+  ResponseTemplate,
+  isInteger,
+  isValidNumber,
 }

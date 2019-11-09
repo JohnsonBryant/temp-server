@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "node index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "clean": "node clean.js"
   },
   "keywords": [
     "温度监测系统"
