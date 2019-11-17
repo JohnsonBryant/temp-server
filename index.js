@@ -28,23 +28,7 @@ let program = {
   isOnTest: false,
   cycle: 10,
   isSendding: true,
-  equipments: [
-    // {
-    //   device: {
-    //     company: '南京高华科技股份有限公司',
-    //     em: '南京高华',
-    //     deviceName: '温湿度传感器',
-    //     deviceType: 'wx01',
-    //     deviceID: '0001',
-    //   },
-    //   config: {
-    //     temp: 22.2,
-    //     humi: 55.5,
-    //     centerID: 2,
-    //     IDS: [1,3],
-    //   }
-    // }
-  ]
+  equipments: [],
 };
 
 // 串口
@@ -396,11 +380,29 @@ app.post('/startTest', (req, res) => {
     return;
   }
 
+  // 拓展前端传输到后端的equipments对象，给每个对象添加各项数据的存储对应的键
+  program.equipments = param.equipments.forEach((equipment) => {
+    let data = {};
+    data['IDS'] = equipment.config.IDS.slice().concat(equipment.config.centerID).sort((a, b) => a-b);
+    data['IDS'].forEach((ID) => {
+      data[ID] = [];
+    });
+    Object.assign(data, {
+      'evennessTemp': [],
+      'fluctuationTemp': [],
+      'deviationTemp': [],
+      'evennessHumi': [],
+      'fluctuationHumi': [],
+      'deviationHumi': [],
+      'time': []
+    });
+    Object.assign(equipment, { data });
+  });
   // 更新程序的主缓存中的测试仪器信息及配置信息
   program.cycle = param.cycle;
   program.isSendding = param.isSendding;
-  program.equipments = param.equipments
-  // 判断是否通过串口下发启动测试数据指令到主节点
+  program.equipments = param.equipments;
+  // 检查当前配置为，仅接收数据测试，不通过串口向主节点下发启动测试数据指令
   if (!program.isSendding) {
     res.send(new util.ResponseTemplate(false, '启动测试成功！'));
     return;
