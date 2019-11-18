@@ -150,70 +150,69 @@ app.get('/config/get', function (req, res) {
 
 // 修改串口配置信息 接口
 app.post('/serialportConf/set', function (req, res) {
-  // 数据检查
-  
+  let recieve = req.data;
+  // 串口检查，必须为 COM + 1 格式
+  let serialPortNameCheck1 = recieve.SerialPortName.length <= 3; // 字符串长度不够
+  let serialPortNameCheck2 = recieve.SerialPortName.slice(0,3).toUpperCase() !== 'COM'; // 字符串不是以 COM / com 开头
+  let serialPortNameCheck3 = isNaN(Number(recieve.SerialPortName.slice(3))); // COM 后的字符包含非数字字符
+  let serialPortNameCheck4 = !util.isPositiveInteger(Number(recieve.SerialPortName.slice(3)))
+  if (serialPortNameCheck1 || serialPortNameCheck2 || serialPortNameCheck3 || serialPortNameCheck4) {
+    res.send(new util.ResponseTemplate(false, '错误，串口号输入错误，请按 "COM9" 格式输入！'));
+    return;
+  }
+  // 波特率检查，必须为正整数，且应符合标准常用波特率值 myutil.CommonBaudRate 数组中的值
+  if (!util.isPositiveInteger(recieve.BaudRate) || !util.CommonBaudRate.includes(recieve.BaudRate)) {
+    res.send(new util.ResponseTemplate(false, '错误，波特率输入错误，应输入正整数的波特率值，请检查后输入！'));
+    return;
+  }
+
   let confRecv = {
-    SerialPortName: req.body.SerialPortName,
-    BaudRate: parseInt(req.body.BaudRate)
+    SerialPortName: recieve.SerialPortName,
+    BaudRate: recieve.BaudRate
   };
   // 保存到配置文件 conf/config.json
-  let result = util.saveJsonToConf(confRecv, util.confPathList[1]);
-  let response = {"isSuccessed": result};
-  res.send(response);
+  let saveResult = util.saveJsonToConf(confRecv, util.confPathList[1]);
+  let message = saveResult ? '串口参数修改成功！' : '串口参数修改失败，错误原因写入配置文件出错！';
+  res.send(new util.ResponseTemplate(saveResult, message));
 });
 
 // 修改电池电量参数 接口
 app.post('/batteryConf/set', function (req, res) {
-  // 数据检查
-  
+  // 电量参数必须为正数，接受小数
+  let recieve = req.body;
+  if (recieve === undefined || !util.isPositiveNumber(recieve.BatteryLow) || !util.isPositiveNumber(recieve.BatteryHigh)) {
+    res.send(new util.ResponseTemplate(false, '电池电量参数错误，电池参数必须为正数，请检查后重新提交！'));
+    return;
+  }
+  // LowBattery >= HighBattery
+  if (recieve.BatteryLow >= recieve.BatteryHigh) {
+    res.send(new util.ResponseTemplate(false, '电池电量参数错误，电量参数的下限值应小于上限值，请检查后重新提交！'));
+    return;
+  }
+
   let confRecv = {
-    BatteryLow: parseFloat(req.body.BatteryLow),
-    BatteryHigh: parseFloat(req.body.BatteryHigh)
+    BatteryLow: recieve.BatteryLow,
+    BatteryHigh: recieve.BatteryHigh
   };
   // 保存到配置文件 conf/config.json
-  let result = util.saveJsonToConf(confRecv, util.confPathList[1]);
-  let response = {"isSuccessed": result};
-  res.send(response);
-});
-
-// 获取测试模板信息 接口
-app.get('/testTemplate/get', function (req, res) {
-  let testTemplate = jsonfile.readFileSync(util.confPathList[2]);
-  res.send({
-    cycle: parseInt(testTemplate.cycle),
-    temp: parseFloat(testTemplate.temp),
-    humi: parseFloat(testTemplate.humi),
-    centerID: parseInt(testTemplate.centerID),
-    IDS: testTemplate.IDS,
-    isSendding: testTemplate.isSendding,
-  });
-});
-
-// 修改测试模板信息 接口
-app.post('/testTemplate/set', function (req, res) {
-  // 数据检查
-  
-  let confRecv = {
-    cycle: parseInt(req.body.cycle) ,
-    temp: parseFloat(req.body.temp),
-    humi: parseFloat(req.body.humi),
-    centerID: parseInt(req.body.centerID),
-    IDS: req.body.IDS,
-    isSendding: req.body.isSendding,
-  };
-  // 保存到配置文件 conf/config.json
-  let result = util.saveJsonToConf(confRecv, util.confPathList[2]);
-  let response = {"isSuccessed": result};
-  res.send(response);
+  let saveResult = util.saveJsonToConf(confRecv, util.confPathList[1]);
+  let message = saveResult ? '电池参数修改成功！' : '电池参数修改失败，错误原因写入配置文件出错！';
+  res.send(new util.ResponseTemplate(saveResult, message));
 });
 
 // 搜索传感器 接口
 app.get('/searchSensor', (req, res) => {
-  // 数据检查
-  
   // 接收到前端请求后，调用串口发送数据到主节点(确认数据包格式)
-  
-  res.send({"isSuccessed": true});
+  let bufstr = 'AA55'+'A1'+'06'+'0B'+'00'+'00000000'+'00';
+  let buf = Buffer.from(bufstr, 'hex');
+  // 调用串口发送数据到主节点
+  serialport.write(buf, (err) => {
+    if (!err) {
+      res.send(new util.ResponseTemplate(true, '搜索传感器指令发送成功'));
+    } else {
+      res.send(new util.ResponseTemplate(false, '串口写入错误，搜索传感器指令发送失败！'));
+    }
+  });
 });
 
 // 修改传感器ID
@@ -246,6 +245,36 @@ app.post('/idSet', (req, res) => {
       res.send(new util.ResponseTemplate(false, '串口写入错误，修改ID指令发送失败！'));
     }
   });
+});
+
+// 获取测试模板信息 接口
+app.get('/testTemplate/get', function (req, res) {
+  let testTemplate = jsonfile.readFileSync(util.confPathList[2]);
+  res.send({
+    cycle: parseInt(testTemplate.cycle),
+    temp: parseFloat(testTemplate.temp),
+    humi: parseFloat(testTemplate.humi),
+    centerID: parseInt(testTemplate.centerID),
+    IDS: testTemplate.IDS,
+    isSendding: testTemplate.isSendding,
+  });
+});
+
+// 修改测试模板信息 接口
+app.post('/testTemplate/set', function (req, res) {
+  // 数据检查
+  
+  let confRecv = {
+    cycle: parseInt(req.body.cycle) ,
+    temp: parseFloat(req.body.temp),
+    humi: parseFloat(req.body.humi),
+    centerID: parseInt(req.body.centerID),
+    IDS: req.body.IDS,
+    isSendding: req.body.isSendding,
+  };
+  // 保存到配置文件 conf/config.json
+  let result = util.saveJsonToConf(confRecv, util.confPathList[2]);
+  res.send(new util.ResponseTemplate(true, '测试模板保存成功！'));
 });
 
 // 获取最近5条委托单位信息
@@ -307,7 +336,6 @@ app.post('/deleteEquipment', (req, res) => {
     return;
   }
   let sql = `delete from equipment where id=${req.body.id};`;
-  console.log(req.body);
   sqliteDB.executeSql(sql);
   res.send(new util.ResponseTemplate(true, '仪器删除成功！'));
 });

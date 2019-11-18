@@ -24,6 +24,7 @@ const ioEvent = {
   directiveSearchSensors: 'directiveSearchSensors',
 }
 
+const CommonBaudRate = [300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 43000, 56000, 57600, 115200]
 
 function nowtime () 
 {
@@ -143,6 +144,15 @@ function isInteger(obj) {
 }
 
 /**
+ * 检查参数是否为整数值
+ * @param obj 任意类型值
+ * @return bool， 表示参数 obj 是否为整数
+ */
+function isPositiveInteger(obj) {
+  return typeof obj === 'number' && obj % 1 === 0 && obj > 0;
+}
+
+/**
  * 检查参数是否为正数
  * @param obj 应传入数值型, 传入非数值参数一定返回false
  * @return bool， 表示参数 obj 是否为正数
@@ -174,4 +184,7 @@ module.exports = {
   ResponseTemplate,
   isInteger,
   isValidNumber,
+  isPositiveNumber,
+  isPositiveInteger,
+  CommonBaudRate,
 }
