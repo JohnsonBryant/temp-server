@@ -132,7 +132,7 @@ httpServer.listen(8080, () => {
   loger.log(util.nowtime(), `webserver listening at ${host}:${port}`);
 });
 
-// 路由到 index.html
+// 应用根路径，路由到 index.html
 app.get('/', (req, res) => {
   res.sendFile('/index.html');
 });
@@ -262,14 +262,53 @@ app.get('/testTemplate/get', function (req, res) {
 
 // 修改测试模板信息 接口
 app.post('/testTemplate/set', function (req, res) {
-  // 数据检查
-  
+  let recieve = req.body;
+  if (recieve === undefined) {
+    res.send(new util.ResponseTemplate(false, '请求有误！数据错误！'));
+    return;
+  }
+  // 获取数据周期检查，周期应为正整数，且在 1 - 65535 范围内
+  let cycle = recieve.cycle;
+  if (!util.isPositiveInteger(cycle) || cycle < 1 || cycle > 65535) {
+    res.send(new util.ResponseTemplate(false, '工作周期应输入数值，且在 1 - 65535 范围内，请重新输入！'));
+    return;
+  }
+  // 温度示值检查
+  let temp = recieve.temp;
+  if (!util.isValidNumber(temp)) {
+    res.send(new util.ResponseTemplate(false, '温度示值应输入有效数值，不可输入非数字字符，请重新输入！'));
+  }
+  // 湿度示值检查
+  let humi = recieve.humi;
+  if (!util.isValidNumber(humi)) {
+    res.send(new util.ResponseTemplate(false, '湿度示值应输入有效数值，不可输入非数字字符，请重新输入！'));
+  }
+  // 中心点ID检查
+  let centerID = recieve.centerID;
+  if (!util.isPositiveInteger(centerID) || centerID <= 0 || centerID > 255) {
+    res.send(new util.ResponseTemplate(false, '中心点ID应输入 0 - 255 范围内的有效数值，请重新输入！'));
+    return;
+  }
+  // 其他ID与中心点ID检查， IDS输入要求为数值数组
+  let IDS = recieve.IDS;
+  if ( !(IDS instanceof Array) || IDS.length < 1 ) {
+    res.send(new util.ResponseTemplate(false, '其他传感器ID输入内容有误，请重新输入！'));
+    return;
+  }
+  let idsCheck = IDS.concat(centerID).some((elem, index, arr) => {
+    return !util.isPositiveInteger(elem) || elem <= 0 || elem > 255 || (arr.indexOf(elem) != arr.lastIndexOf(elem));
+  });
+  if (idsCheck) {
+    res.send(new util.ResponseTemplate(false, '传感器ID输入有误，请勿输入非数值字符，且不可输入重复的ID！'));
+    return;
+  }
+
   let confRecv = {
-    cycle: parseInt(req.body.cycle) ,
-    temp: parseFloat(req.body.temp),
-    humi: parseFloat(req.body.humi),
-    centerID: parseInt(req.body.centerID),
-    IDS: req.body.IDS,
+    cycle: cycle ,
+    temp: temp,
+    humi: humi,
+    centerID: centerID,
+    IDS: IDS.join(','),
     isSendding: req.body.isSendding,
   };
   // 保存到配置文件 conf/config.json
@@ -342,7 +381,7 @@ app.post('/deleteEquipment', (req, res) => {
 
 // 停止测试接口
 app.get('/stopTest', (req, res) => {
-  let buf = Buffer.from('AA55CE060B00000000000000', 'hex');
+  let buf = Buffer.from('AA55'+'CE'+'06'+'0B'+'00000000'+'000000', 'hex');
   serialport.write(buf, (err) => {
     if (!err) {
       res.send(new util.ResponseTemplate(true, '发送停止测试指令成功！'));
@@ -436,10 +475,17 @@ app.post('/startTest', (req, res) => {
     return;
   }
   // 下发启动测试数据指令到主节点
-  let bufstr = 'AA55CE060B' + '00' + program.cycle.toString(16).padStart(4, '0') + '0100' + '0000';
+  let bufstr = 'AA55'+'CE'+'06'+'0B' + '00' + program.cycle.toString(16).padStart(4, '0') + '0100' + '0000';
   serialport.write(Buffer.from(bufstr, 'hex'), (err) => {
     if (!err) {
       res.send(new util.ResponseTemplate(true, '发送启动测试指令成功！'));
+      // 启动定时器，在 3000 毫秒后，检查系统是否进入测试状态，判定启动测试是否成功
+      setTimeout(() => {
+        if (!program.isOnTest) {
+          // 启动失败
+          io.emit(util.ioEvent.systemMessage, `启动测试失败！`);
+        }
+      }, 3000);
     } else {
       res.send(new util.ResponseTemplate(false, '串口写入错误，发送启动测试指令失败，请重新操作！！！'));
     }

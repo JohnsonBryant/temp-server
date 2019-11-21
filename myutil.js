@@ -22,6 +22,7 @@ const ioEvent = {
   directiveStopTest: 'directiveStopTest',
   directiveModifyID: 'directiveModifyID',
   directiveSearchSensors: 'directiveSearchSensors',
+  systemMessage: 'systemMessage',
 }
 
 const CommonBaudRate = [300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 43000, 56000, 57600, 115200]
