@@ -150,7 +150,7 @@ app.get('/config/get', function (req, res) {
 
 // 修改串口配置信息 接口
 app.post('/serialportConf/set', function (req, res) {
-  let recieve = req.data;
+  let recieve = req.body;
   // 串口检查，必须为 COM + 1 格式
   let serialPortNameCheck1 = recieve.SerialPortName.length <= 3; // 字符串长度不够
   let serialPortNameCheck2 = recieve.SerialPortName.slice(0,3).toUpperCase() !== 'COM'; // 字符串不是以 COM / com 开头
@@ -280,7 +280,7 @@ app.post('/testTemplate/set', function (req, res) {
   }
   // 湿度示值检查
   let humi = recieve.humi;
-  if (!util.isValidNumber(humi)) {
+  if (!util.isPositiveNumber(humi)) {
     res.send(new util.ResponseTemplate(false, '湿度示值应输入有效数值，不可输入非数字字符，请重新输入！'));
   }
   // 中心点ID检查
