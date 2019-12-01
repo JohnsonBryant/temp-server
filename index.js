@@ -406,7 +406,7 @@ app.post('/startTest', (req, res) => {
     res.send(new util.ResponseTemplate(false, '错误请求！！！'));
     return;
   }
-  if ( !util.isInteger(param.cycle) || param.cycle < 1) {
+  if ( !util.isPositiveInteger(param.cycle) ) {
     // 周期参数错误
     res.send(new util.ResponseTemplate(false, '周期错误，周期必须为数值，且应大于或等于1 ！'));
     return;
@@ -447,24 +447,6 @@ app.post('/startTest', (req, res) => {
     return;
   }
 
-  // 拓展前端传输到后端的equipments对象，给每个对象添加各项数据的存储对应的键
-  program.equipments = param.equipments.forEach((equipment) => {
-    let data = {};
-    data['IDS'] = equipment.config.IDS.slice().concat(equipment.config.centerID).sort((a, b) => a-b);
-    data['IDS'].forEach((ID) => {
-      data[ID] = [];
-    });
-    Object.assign(data, {
-      'evennessTemp': [],
-      'fluctuationTemp': [],
-      'deviationTemp': [],
-      'evennessHumi': [],
-      'fluctuationHumi': [],
-      'deviationHumi': [],
-      'time': []
-    });
-    Object.assign(equipment, { data });
-  });
   // 更新程序的主缓存中的测试仪器信息及配置信息
   program.cycle = param.cycle;
   program.isSendding = param.isSendding;
