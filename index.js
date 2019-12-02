@@ -460,20 +460,30 @@ app.post('/startTest', (req, res) => {
   let bufstr = 'AA55'+'CE'+'06'+'0B' + '00' + program.cycle.toString(16).padStart(4, '0') + '0100' + '0000';
   serialport.write(Buffer.from(bufstr, 'hex'), (err) => {
     if (!err) {
+      program.isOnTest = true;
       res.send(new util.ResponseTemplate(true, '发送启动测试指令成功！'));
       // 启动定时器，在 3000 毫秒后，检查系统是否进入测试状态，判定启动测试是否成功
-      setTimeout(() => {
-        if (!program.isOnTest) {
-          // 启动失败
-          io.emit(util.ioEvent.systemMessage, `启动测试失败！`);
-        }
-      }, 3000);
+      // setTimeout(() => {
+      //   if (!program.isOnTest) {
+      //     // 启动失败
+      //     io.emit(util.ioEvent.systemMessage, `启动测试失败！`);
+      //   }
+      // }, 3000);
     } else {
       res.send(new util.ResponseTemplate(false, '串口写入错误，发送启动测试指令失败，请重新操作！！！'));
     }
   });
 });
 
+app.get('/systemSync', (req, res) => {
+  let response = {
+    isOnTest: program.isOnTest,
+    cycle: program.cycle,
+    isSendding: program.isSendding,
+    equipments: program.equipments,
+  };
+  res.send(response);
+});
 
 // websocket server 客户端连接事件，下发连接成功提示到客户端
 io.on(util.ioEvent.connection, (socket) => {
