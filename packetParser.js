@@ -3,7 +3,7 @@
  * 定义系统中通信的过程的二进制数据包解析的原型类，使用binary-paser作为基类
  * 
  */
-const Parser = require('binary-parser').Parser
+const Parser = require('binary-parser').Parser;
 
 const DataPackParser = new Parser()
   .endianess('big')
@@ -19,7 +19,7 @@ const DataPackParser = new Parser()
   .uint16('count')
   .uint16('cycle')
   .uint8('reserv')
-  .uint16('checksum')
+  .uint16('checksum');
   
 const DirectivePackParser = new Parser()
   .endianess('big')
@@ -32,11 +32,11 @@ const DirectivePackParser = new Parser()
     type: 'uint8',
     length: 4
   })
-  .uint16('checksum')
+  .uint16('checksum');
 
-const minlen = 6
+const minlen = 6;
 
 module.exports = {
   DataPackParser, DirectivePackParser,
-  minlen
+  minlen,
 }

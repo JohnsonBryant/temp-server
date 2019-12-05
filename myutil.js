@@ -18,6 +18,7 @@ const ioEvent = {
   connection: 'connection',
   connectMsg: 'connectMsg',
   dataMsg: 'dataMsg',
+  unconfigedDataMsg: 'unconfigedDataMsg',
   directiveStartTest: 'directiveStartTest',
   directiveStopTest: 'directiveStopTest',
   directiveModifyID: 'directiveModifyID',
@@ -43,14 +44,8 @@ const confPathList = [
   path.join(__dirname, 'conf'),
   path.join(__dirname, 'conf/config.json'),
   path.join(__dirname, 'conf/testTemplate.json'),
-  path.join(__dirname, 'log'),
 ]
 const confList = [
-  {
-    path: confPathList[3],
-    type: "dir",
-    data: null
-  },
   {
     path: confPathList[0],
     type: "dir",

@@ -7,28 +7,24 @@ const http = require('http');
 const socketIo = require('socket.io');
 const bodyParser = require('body-parser');
 const SerialPort = require('serialport');
-const { Console } = require('console');
 const util = require('./myutil.js'); // 程序关键配置参数，功能函数，初始化函数
 let SqliteDB = require('./sqliteDB').SqliteDB;
 const Packet = require('./packetParser.js'); // 数据解析模板
 
 util.initConf(); // 程序配置目录及文件初始化检查 / 生成
 // 全局参数变量
-const output = fs.createWriteStream(path.join(__dirname, `log/log${util.nowDate()}.log`));
-const errOutput = fs.createWriteStream(path.join(__dirname, `log/errLog${util.nowDate()}.log`));
-const loger = new Console({stdout: output, stderr: errOutput});
 const sqliteDB = new SqliteDB(path.join(__dirname, 'data.db')); // 数据库对象，封装必要功能函数
 const app = express(); // express app object
 const httpServer = http.Server(app); // http server
 const io = socketIo(httpServer); // websocket server
 const Config = require('./conf/config.json'); // main config of program
-// let buf = Buffer.alloc(0); // main data buffer
 let program = {
   buf: Buffer.alloc(0),
   isOnTest: false,
   cycle: 10,
   isSendding: true,
   equipments: [],
+  IDS: [],
 };
 
 // 串口
@@ -41,7 +37,7 @@ serialport.open(() => {
 });
 // 串口错误
 serialport.on('error', (message) => {
-  loger.error(util.nowtime(), message);
+  console.error(util.nowtime(), message);
 });
 // 串口数据接收
 serialport.on('data', (data) => {
@@ -52,71 +48,107 @@ serialport.on('data', (data) => {
   let bufLen = program.buf.length + data.length;
   program.buf = Buffer.concat([program.buf, data], bufLen);
 
-  processbuf();
+  processbuf(program);
 })
 // 串口数据校验处理
-const processbuf = function () {
-  let idx = program.buf.indexOf(Buffer.from('AA55', 'hex'));
-  if (idx === -1) {
-    program.buf = Buffer.alloc(0);
-    return;
-  }
+const processbuf = function (program) {
+  while (program.buf.length > Packet.minlen) {
+    if (program.buf[0] === 0xAA && program.buf[1] === 0x55) {
+      let packlen = program.buf.readUInt8(3) + Packet.minlen;
+      if(program.buf.length < packlen){
+        break;
+      }
+      let bufPack = Buffer.alloc(packlen);
+      program.buf.copy(bufPack, 0, 0, packlen);
+      util._event.emit(util.AppEvents.parse, bufPack);
 
-  while (true) {
-    if (program.buf.length < Packet.minlen) {
-      break;
+      let bufremain = Buffer.alloc(program.buf.length - packlen);
+      program.buf.copy(bufremain, 0, packlen, program.buf.length);
+      program.buf = bufremain;
+    } else {
+      let bufremain = Buffer.alloc(program.buf.length - 1);
+      program.buf.copy(bufremain, 0, 1, program.buf.length);
+      program.buf = bufremain;
     }
-
-    let packlen = program.buf.readUInt8(idx + 3) + Packet.minlen;
-    if(program.buf.length < packlen){
-      break;
-    }
-
-    let packbuf = Buffer.alloc(packlen);
-    program.buf.copy(packbuf, 0, idx, idx + packlen);
-
-    util._event.emit(util.AppEvents.parse, packbuf);
-
-    let remainlen = program.buf.length - packlen - idx;
-    let remainbuf = Buffer.alloc(remainlen);
-    program.buf.copy(remainbuf, 0, idx + packlen, program.buf.length);
-    program.buf = remainbuf;
-
-    idx = program.buf.indexOf(Buffer.from('AA55', 'hex'));
   }
 };
 
 // 串口数据解析，通过事件分发到其他处理过程
 util._event.on(util.AppEvents.parse, (packbuf) => {
+  // 系统未在测试状态
+  if (!program.isOnTest) {
+    console.log('系统未在测试状态，收到数据字节: ' + `${packbuf.toString('hex')}`);
+    return;
+  }
+
   if (packbuf.readUInt8(2) === 0xD1) {
     // 接收到传感器数据
     let DataPack = Packet.DataPackParser.parse(packbuf);
-
-    // 处理传感器数据，与测试仪器绑定
-
-    // 系统是否在测试中，传感器ID是否对应测试中的某个仪器，
-    
-    // 触发数据消息事件，交由 io ，传送单个传感器数据包到前端
-    util._event.emit(util.AppEvents.dataMsg, DataPack);
+    if (program.IDS.includes(DataPack.deviceID)) {
+      // 传感器ID在配置中， 对应测试中的某个仪器
+      // 按照定义格式， 缓存到传感器数据组， 收到一组数据上报结束标志， 处理缓存的数据组
+      // let equipment = program.equipments.find(ele => ele.data.IDS.includes(DataPack.deviceID) );
+      // let data = equipment.data;
+      // data[DataPack.deviceID]['temp'].push(DataPack.temp);
+      // data[DataPack.deviceID]['humi'].push(DataPack.humi);
+      // io.emit(util.ioEvent.dataMsg, DataPack);
+    } else {
+      // 传感器ID不在配置中
+      io.emit(util.ioEvent.unconfigedDataMsg, DataPack);
+    }
   } else {
     // 传感器指令解析
     let DirectivePack = Packet.DirectivePackParser.parse(packbuf);
     // 触发数据指令事件，交由 io 对象，传送数据指令消息到前端用户
-    // util._event.emit(util.AppEvents.directiveMsg, DirectivePack);
     directiveAction(io, DirectivePack);
   }
-})
-
-// 自定义event对象绑定事件， 下发传感器数据消息 到客户端
-util._event.on(util.AppEvents.dataMsg, (pack) => {
-  io.emit(util.ioEvent.dataMsg, pack);
 });
 
-// // 自定义event对象绑定事件， 下发传感器指令消息 到客户端
-// util._event.on(util.AppEvents.directiveMsg, (pack) => {
-//   // 不同应答类型的分支处理，定义并封装适合的应答JSON格式，由 io.emit 推送到前端。
+// 仪器挂载的传感器全部收到数据， 计算更新均匀度、波动度、偏差
+function updateEquipmentData(program) {
 
-// });
+}
+
+// 处理系统定义的指令数据包
+function directiveAction(io, pack) {
+  let command = pack.command.toString(16).toUpperCase();
+  let commands = {
+    'DD': function () {
+      /* 成功启动使主节点周期获取数据动作，开始测试 / 继续测试
+      * 更新当前系统是否在测试状态变量
+      */
+      program.isOnTest = true;
+      io.emit(util.ioEvent.directiveStartTest, pack);
+    },
+    'CE': function () {
+      /* 成功停止主节点周期获取数据动作，停止测试 / 暂停测试
+      * 更新当前系统是否在测试状态变量
+      */
+      program.isOnTest = false;
+      io.emit(util.ioEvent.directiveStopTest, pack);
+    },
+    'A0': function () {
+      // 成功修改传感器 ID，推送数据对象到前端
+      io.emit(util.ioEvent.directiveModifyID, pack);
+    },
+    'A1': function () {
+      // 搜索传感器应答数据，推送数据对象到前端，可获取到单个在线的传感器ID号
+      io.emit(util.ioEvent.directiveSearchSensors, pack);
+    },
+  };
+
+  if (typeof commands[command] !== 'function') {
+    console.log('无效的数据指令字节 ' + command + ' !!!');
+    return;
+  }
+
+  commands[command]();
+}
+
+// websocket server 客户端连接事件，下发连接成功提示到客户端
+io.on(util.ioEvent.connection, (socket) => {
+  io.emit(util.ioEvent.connectMsg, `you have connectted with websocket server, please waiting for message update!`);
+});
 
 
 // 添加路由中间件，解析JSON、 encoded 数据
@@ -129,7 +161,6 @@ httpServer.listen(8080, () => {
   let host = httpServer.address().address;
   let port = httpServer.address().port;
   console.log(util.nowtime(), `webserver listening at ${host}:${port}`);
-  loger.log(util.nowtime(), `webserver listening at ${host}:${port}`);
 });
 
 // 应用根路径，路由到 index.html
@@ -451,6 +482,7 @@ app.post('/startTest', (req, res) => {
   program.cycle = param.cycle;
   program.isSendding = param.isSendding;
   program.equipments = param.equipments;
+  program.IDS = param.IDS;
   // 检查当前配置为，仅接收数据测试，不通过串口向主节点下发启动测试数据指令
   if (!program.isSendding) {
     res.send(new util.ResponseTemplate(false, '启动测试成功！'));
@@ -462,13 +494,6 @@ app.post('/startTest', (req, res) => {
     if (!err) {
       program.isOnTest = true;
       res.send(new util.ResponseTemplate(true, '发送启动测试指令成功！'));
-      // 启动定时器，在 3000 毫秒后，检查系统是否进入测试状态，判定启动测试是否成功
-      // setTimeout(() => {
-      //   if (!program.isOnTest) {
-      //     // 启动失败
-      //     io.emit(util.ioEvent.systemMessage, `启动测试失败！`);
-      //   }
-      // }, 3000);
     } else {
       res.send(new util.ResponseTemplate(false, '串口写入错误，发送启动测试指令失败，请重新操作！！！'));
     }
@@ -484,43 +509,3 @@ app.get('/systemSync', (req, res) => {
   };
   res.send(response);
 });
-
-// websocket server 客户端连接事件，下发连接成功提示到客户端
-io.on(util.ioEvent.connection, (socket) => {
-  io.emit(util.ioEvent.connectMsg, `you have connectted with websocket server, please waiting for message update!`);
-});
-
-
-function directiveAction(io, pack) {
-  let command = pack.command.toString(16);
-  let commands = {
-    'DD': function () {
-      /* 成功启动使主节点周期获取数据动作，开始测试 / 继续测试
-      * 更新当前系统是否在测试状态变量
-      */
-      program.isOnTest = true;
-      io.emit(util.ioEvent.directiveStartTest, pack);
-    },
-    'CE': function () {
-      /* 成功停止主节点周期获取数据动作，停止测试 / 暂停测试
-      * 更新当前系统是否在测试状态变量
-      */
-      program.isOnTest = false;
-      io.emit(util.ioEvent.directiveStopTest, pack);
-    },
-    'A0': function () {
-      // 成功修改传感器 ID，推送数据对象到前端
-      io.emit(util.ioEvent.directiveModifyID, pack);
-    },
-    'A1': function () {
-      // 搜索传感器应答数据，推送数据对象到前端，可获取到单个在线的传感器ID号
-      io.emit(util.ioEvent.directiveSearchSensors, pack);
-    },
-  };
-
-  if (typeof commands[command] !== 'function') {
-    loger.log('无效的数据指令字节 ' + command + ' !!!');
-  }
-
-  commands[command]();
-}
