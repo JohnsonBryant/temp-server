@@ -422,6 +422,16 @@ app.get('/lastestFiveTestEq', (req, res) => {
   });
 });
 
+// 获取所有包含指定关键字的最新五条仪器信息
+app.post('/getEquipmentsByCompanyName', (req, res) => {
+  // 接收到前端请求后，从数据表（测试设备）中，查询所有委托单位信息
+  let sql = `select id, company, em, deviceName, deviceType, deviceID, insertDate from equipment where company like "%${req.body.company}%" order by insertDate desc limit 5;`;
+  sqliteDB.queryData(sql, (rows) => {
+    res.send(rows);
+  });
+});
+
+
 // 插入测试设备数据接口
 app.post('/addEquipment', (req, res) => {
   // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，将测试设备信息存储到测试设备表中， 单条记录写入
