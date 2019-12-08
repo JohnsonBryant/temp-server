@@ -167,6 +167,57 @@ function isValidNumber(obj) {
   return typeof obj === 'number' && !isNaN(obj);
 }
 
+/**
+ * @param {*} data 数值数组
+ * @return 数组长度为0时，返回 NaN
+ */
+function Average(data) {
+  if (data instanceof Array) {
+    throw new Error('invalid input, param can only be array...');
+  }
+  let len = data.length;
+  if (len === 0) {
+    return NaN;
+  }
+  let sum;
+  for (let i = 0; i < len; i++) {
+    sum += data[i];
+  }
+  return sum / len;
+}
+
+/**
+ * @param {*} data 数值数组
+ * @return 数组长度为0时，返回 NaN
+ */
+function Max(data) {
+  let arr = Array.prototype.slice.call(data);
+  let len = arr.length;
+  if (len === 0) {
+    return NaN;
+  }
+  if (len === 1) {
+    return arr[0];
+  }
+  return Math.max.apply(null, arr);
+}
+
+/**
+ * @param {*} data 数值数组
+ * @return 数组长度为0时，返回 NaN
+ */
+function Min(data) {
+  let arr = Array.prototype.slice.call(data);
+  let len = arr.length;
+  if (len === 0) {
+    return NaN;
+  }
+  if (len === 1) {
+    return arr[0];
+  }
+  return Math.min.apply(null, arr);
+}
+
 
 module.exports = {
   _event,
@@ -183,4 +234,5 @@ module.exports = {
   isPositiveNumber,
   isPositiveInteger,
   CommonBaudRate,
+  Average,
 }

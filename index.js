@@ -25,6 +25,7 @@ let program = {
   isSendding: true,
   equipments: [],
   IDS: [],
+  cache: {},
 };
 
 // 串口
@@ -60,7 +61,8 @@ const processbuf = function (program) {
       }
       let bufPack = Buffer.alloc(packlen);
       program.buf.copy(bufPack, 0, 0, packlen);
-      util._event.emit(util.AppEvents.parse, bufPack);
+      // util._event.emit(util.AppEvents.parse, bufPack);
+      parseData(bufPack);
 
       let bufremain = Buffer.alloc(program.buf.length - packlen);
       program.buf.copy(bufremain, 0, packlen, program.buf.length);
@@ -73,76 +75,125 @@ const processbuf = function (program) {
   }
 };
 
-// 串口数据解析，通过事件分发到其他处理过程
-util._event.on(util.AppEvents.parse, (packbuf) => {
-  // 系统未在测试状态
-  if (!program.isOnTest) {
+function parseData(packbuf) {
+  if (!program.isOnTest) { // 系统未在测试状态
     console.log('系统未在测试状态，收到数据字节: ' + `${packbuf.toString('hex')}`);
     return;
   }
-
   if (packbuf.readUInt8(2) === 0xD1) {
-    // 接收到传感器数据
-    let DataPack = Packet.DataPackParser.parse(packbuf);
-    if (program.IDS.includes(DataPack.deviceID)) {
-      // 传感器ID在配置中， 对应测试中的某个仪器
-      // 按照定义格式， 缓存到传感器数据组， 收到一组数据上报结束标志， 处理缓存的数据组
-      // let equipment = program.equipments.find(ele => ele.data.IDS.includes(DataPack.deviceID) );
-      // let data = equipment.data;
-      // data[DataPack.deviceID]['temp'].push(DataPack.temp);
-      // data[DataPack.deviceID]['humi'].push(DataPack.humi);
-      // io.emit(util.ioEvent.dataMsg, DataPack);
-    } else {
-      // 传感器ID不在配置中
-      io.emit(util.ioEvent.unconfigedDataMsg, DataPack);
-    }
+    io.emit(util.AppEvents.parse, packbuf);
   } else {
-    // 传感器指令解析
     let DirectivePack = Packet.DirectivePackParser.parse(packbuf);
-    // 触发数据指令事件，交由 io 对象，传送数据指令消息到前端用户
-    directiveAction(io, DirectivePack);
+    directiveAction(io, DirectivePack); // 处理各种数据指令事件
+  }
+}
+
+// 监听解析传感器数据数据， 对数据进行解析
+util._event.on(util.AppEvents.parse, (packbuf) => {
+  // 解析处理传感器数据
+  let DataPack = Packet.DataPackParser.parse(packbuf);
+  if (program.IDS.includes(DataPack.deviceID)) {
+    // 传感器ID在配置中， 对应测试中的某个仪器
+    program.cache[DataPack.deviceID.toString()] = {  // 缓存在配置中的传感器的温湿度数据
+      temp: DataPack.temp,
+      humi: DataPack.humi,
+      batt: DataPack.batt,
+    };
+  } else {
+    // 传感器ID不在配置中
+    io.emit(util.ioEvent.unconfigedDataMsg, DataPack);
   }
 });
-
-// 仪器挂载的传感器全部收到数据， 计算更新均匀度、波动度、偏差
-function updateEquipmentData(program) {
-
-}
 
 // 处理系统定义的指令数据包
 function directiveAction(io, pack) {
   let command = pack.command.toString(16).toUpperCase();
   let commands = {
-    'DD': function () {
-      /* 成功启动使主节点周期获取数据动作，开始测试 / 继续测试
-      * 更新当前系统是否在测试状态变量
-      */
-      program.isOnTest = true;
-      io.emit(util.ioEvent.directiveStartTest, pack);
-    },
-    'CE': function () {
-      /* 成功停止主节点周期获取数据动作，停止测试 / 暂停测试
-      * 更新当前系统是否在测试状态变量
-      */
-      program.isOnTest = false;
-      io.emit(util.ioEvent.directiveStopTest, pack);
-    },
-    'A0': function () {
+    'A0': () => {
       // 成功修改传感器 ID，推送数据对象到前端
       io.emit(util.ioEvent.directiveModifyID, pack);
     },
-    'A1': function () {
+    'A1': () => {
       // 搜索传感器应答数据，推送数据对象到前端，可获取到单个在线的传感器ID号
       io.emit(util.ioEvent.directiveSearchSensors, pack);
     },
+    'CF': () => {
+      // 主节点一轮上报数据到应用端的开始 / 结束信号
+      let key = pack.reserv[0];
+      if (key === 0x01) { // 主节点一轮上报数据的开始标志
+        
+      } else if (key === 0x01) { // 主节点一轮上报数据的结束标志
+        updateEquipmentData(program); // 更新程序主缓存的数据， 计算更新检测数据
+        // 更新数据到前端
+        
+      }
+      program.cache = {};
+    }
   };
-
   if (typeof commands[command] !== 'function') {
     console.log('无效的数据指令字节 ' + command + ' !!!');
     return;
   }
-
   commands[command]();
+}
+
+// 主节点一轮上报数据结束，从缓存中检查，仪器下挂载的传感器是否均收到数据， 计算更新均匀度、波动度、偏差
+function updateEquipmentData(program) {
+  let time = util.nowtime();
+  let data = program.cache;
+  program.equipments.forEach((equipment, index, equipments) => {
+    let IDS = equipment.data.IDS;
+    if ( IDS.every(id => data.hasOwnProperty(id)) ) { // 仪器挂载的传感器全部收到数据
+      // 更新仪器下挂载的传感器的数据
+      IDS.forEach((id) => {
+        equipment.data[id]['temp'].push(data[id].temp);
+        equipment.data[id]['humi'].push(data[id].humi);
+        equipment.data[id]['batt'].push(data[id].batt);
+      });
+      // 计算更新仪器的 温度 / 湿度 的均匀度、波动度、偏差
+      let tempConfig = equipment.config.temp;
+      let humiConfig = equipment.config.humi;
+      let centerID = equipment.config.centerID;
+      let centerSensor = equipment.data[centerID];
+      let evennessTemp;
+      let fluctuationTemp;
+      let deviationTemp;
+      let evennessHumi;
+      let fluctuationHumi;
+      let deviationHumi;
+      let arrtemp = [];
+      let arrhumi = [];
+      for (let i = 0; i < centerSensor['temp'].length; i++) {
+        let roundtemp = IDS.map(id => equipment.data[id]['temp'][i]);
+        let roundhumi = IDS.map(id => equipment.data[id]['humi'][i]);
+
+        arrtemp.push(util.Max(roundtemp) - util.Min(roundtemp));
+        arrhumi.push(util.Average(roundhumi) - util.Min(roundhumi));
+      }
+      evennessTemp = util.Average(arrtemp);
+      fluctuationTemp = centerSensor['temp'].length === 1 ?
+        data[centerID].temp : 
+        util.Max(centerSensor['temp']) - util.Min(centerSensor['temp']);
+      deviationTemp = tempConfig - util.Average(centerSensor['temp']);
+      
+      evennessHumi = util.Average(arrhumi);
+      fluctuationHumi = centerSensor['humi'].length === 1 ?
+        data[centerID].humi : 
+        util.Max(centerSensor['humi']) - util.Min(centerSensor['humi']);
+      deviationHumi = humiConfig - util.Average(centerSensor['humi']);
+      
+      equipment.data['evennessTemp'].push(evennessTemp);
+      equipment.data['fluctuationTemp'].push(fluctuationTemp);
+      equipment.data['deviationTemp'].push(deviationTemp);
+      equipment.data['evennessHumi'].push(evennessHumi);
+      equipment.data['fluctuationHumi'].push(fluctuationHumi);
+      equipment.data['deviationHumi'].push(deviationHumi);
+      equipment.data['time'].push(time);
+    } else { // 仪器挂载的传感器未全部收到数据
+      console.log(`仪器对应的传感器数据本次未全部收到`);
+      console.log(equipment);
+    }
+  });
 }
 
 // websocket server 客户端连接事件，下发连接成功提示到客户端
@@ -373,41 +424,54 @@ app.get('/lastestFiveTestEq', (req, res) => {
 
 // 插入测试设备数据接口
 app.post('/addEquipment', (req, res) => {
-  // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，将测试设备信息存储到测试设备表中
-  // 单条记录写入 / 多条记录批量写入
-  let equipmentInfos = [];
-  req.body.forEach((item) => {
-    equipmentInfos.push([item.company,
-      item.em,
-      item.deviceName,
-      item.deviceType,
-      item.deviceID,
-      item.insertDate
-    ]);
-  });
-
-  // 数据写入结果的监测，及返回结果的调整
-  let result = new util.ResponseTemplate(true);
-  try {
-    equipmentInfos.forEach((item) => {
-      sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);', [item]);
-    });
-  } catch {
-    result.isSuccessed = false;
+  // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，将测试设备信息存储到测试设备表中， 单条记录写入
+  let equipment = req.body;
+  let eq = equipment[0];
+  if ( !(equipment instanceof Array) || equipment.length > 1) {
+    // 检查参数必须为数组
+    res.send(new util.ResponseTemplate(false, '错误的请求！'));
+    return;
   }
-  res.send(result);
+
+  let sqlQuery = `select count(*) as count from equipment where company=? and em=? and deviceName=? and deviceType=? and deviceID=?`;
+  // 检查新增的仪器是否已存在
+  sqliteDB.queryDataWithParam(sqlQuery, [eq.company, eq.em, eq.deviceName, eq.deviceType, eq.deviceID], (rows) => {
+    if (rows[0].count > 0) {
+      res.send(new util.ResponseTemplate(false, '仪器已存在，请勿重复添加！'));
+      return;
+    }
+    // 数据写入结果的监测，及返回结果的调整
+    sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);', equipment, (err) => {
+      if (!err) {
+        res.send(new util.ResponseTemplate(false, '新增仪器失败！'));
+      } else {
+        res.send(new util.ResponseTemplate(true, '新增仪器成功！'));
+      }
+    });
+  });
 });
 
 // 删除单个测试设备数据接口
 app.post('/deleteEquipment', (req, res) => {
   // 检查接收参数的正确性
-  if (req.body === undefined || req.body.id === undefined) {
+  let param = req.body;
+  if (param.id === undefined || !util.isPositiveInteger(param.id)) {
     res.send(new util.ResponseTemplate(false, '操作无效，请按F5刷新后，重新操作！'));
     return;
   }
-  let sql = `delete from equipment where id=${req.body.id};`;
-  sqliteDB.executeSql(sql);
-  res.send(new util.ResponseTemplate(true, '仪器删除成功！'));
+  let equipmentId = req.body.id;
+  let sql = `delete from equipment where id=${equipmentId};`;
+  sqliteDB.executeSql(sql, (err) => {
+    let result = {
+      success: true,
+      message: '删除成功！',
+    };
+    if (err !== null) {
+      result.success = false;
+      result.message = `删除失败！`;
+    }
+    res.send(result);
+  });
 });
 
 // 停止测试接口
@@ -415,7 +479,15 @@ app.get('/stopTest', (req, res) => {
   let buf = Buffer.from('AA55'+'CE'+'06'+'0B'+'00000000'+'000000', 'hex');
   serialport.write(buf, (err) => {
     if (!err) {
-      res.send(new util.ResponseTemplate(true, '发送停止测试指令成功！'));
+      // reset variable program
+      program.isOnTest = false;
+      program.cycle = 10;
+      program.isSendding = true;
+      program.equipments = [];
+      program.IDS = [];
+      program.cache = {};
+
+      res.send(new util.ResponseTemplate(true, '停止测试成功！'));
     } else {
       res.send(new util.ResponseTemplate(false, '串口写入错误，发送停止测试指令失败，请重新操作！！！'));
     }
@@ -478,22 +550,23 @@ app.post('/startTest', (req, res) => {
     return;
   }
 
-  // 更新程序的主缓存中的测试仪器信息及配置信息
-  program.cycle = param.cycle;
-  program.isSendding = param.isSendding;
-  program.equipments = param.equipments;
-  program.IDS = param.IDS;
   // 检查当前配置为，仅接收数据测试，不通过串口向主节点下发启动测试数据指令
-  if (!program.isSendding) {
+  if (!param.isSendding) {
     res.send(new util.ResponseTemplate(false, '启动测试成功！'));
     return;
   }
   // 下发启动测试数据指令到主节点
-  let bufstr = 'AA55'+'CE'+'06'+'0B' + '00' + program.cycle.toString(16).padStart(4, '0') + '0100' + '0000';
+  let bufstr = 'AA55'+'CE'+'06'+'0B' + '00' + param.cycle.toString(16).padStart(4, '0') + '0100' + '0000';
   serialport.write(Buffer.from(bufstr, 'hex'), (err) => {
     if (!err) {
+      // 更新程序的主缓存中的测试仪器信息及配置信息
       program.isOnTest = true;
-      res.send(new util.ResponseTemplate(true, '发送启动测试指令成功！'));
+      program.cycle = param.cycle;
+      program.isSendding = param.isSendding;
+      program.equipments = param.equipments;
+      program.IDS = param.IDS;
+
+      res.send(new util.ResponseTemplate(true, '启动测试成功！'));
     } else {
       res.send(new util.ResponseTemplate(false, '串口写入错误，发送启动测试指令失败，请重新操作！！！'));
     }

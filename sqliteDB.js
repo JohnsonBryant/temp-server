@@ -39,14 +39,20 @@ DB.SqliteDB.prototype.createTable = function(sql){
 };
  
 /// tilesData format; [[level, column, row, content], [level, column, row, content]]
-DB.SqliteDB.prototype.insertData = function(sql, objects){
-    DB.db.serialize(function(){
-        var stmt = DB.db.prepare(sql);
-        for(var i = 0; i < objects.length; ++i){
-            stmt.run(objects[i]);
+DB.SqliteDB.prototype.insertData = function(sql, objects, callback){
+    DB.db.serialize(() => {
+        let err = undefined;
+        try {
+            var stmt = DB.db.prepare(sql);
+            for(var i = 0; i < objects.length; ++i){
+                stmt.run(objects[i]);
+            }
+            stmt.finalize();
+        } catch (e) {
+            err = e;
         }
 
-        stmt.finalize();
+        callback(err);
     });
 };
  
@@ -63,12 +69,28 @@ DB.SqliteDB.prototype.queryData = function(sql, callback){
         }
     });
 };
- 
-DB.SqliteDB.prototype.executeSql = function(sql){
-    DB.db.run(sql, function(err){
+
+DB.SqliteDB.prototype.queryDataWithParam = function(sql, param, callback){
+    DB.db.all(sql, param, function(err, rows){
         if(null != err){
             DB.printErrorInfo(err);
+            return;
         }
+ 
+        /// deal query data.
+        if(callback){
+            callback(rows);
+        }
+    });
+};
+ 
+DB.SqliteDB.prototype.executeSql = function(sql, callback){
+    DB.db.run(sql, function (err) {
+        if (null !== err) {
+            DB.printErrorInfo(err);
+        }
+
+        callback(err);
     });
 };
  
