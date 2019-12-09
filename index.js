@@ -55,13 +55,12 @@ serialport.on('data', (data) => {
 const processbuf = function (program) {
   while (program.buf.length > Packet.minlen) {
     if (program.buf[0] === 0xAA && program.buf[1] === 0x55) {
-      let packlen = program.buf.readUInt8(3) + Packet.minlen;
+      let packlen = program.buf[2] === 0xD1 ? program.buf.readUInt8(3) + 8 : program.buf.readUInt8(3) + Packet.minlen;
       if(program.buf.length < packlen){
         break;
       }
       let bufPack = Buffer.alloc(packlen);
       program.buf.copy(bufPack, 0, 0, packlen);
-      // util._event.emit(util.AppEvents.parse, bufPack);
       parseData(bufPack);
 
       let bufremain = Buffer.alloc(program.buf.length - packlen);
@@ -76,12 +75,12 @@ const processbuf = function (program) {
 };
 
 function parseData(packbuf) {
-  if (!program.isOnTest) { // 系统未在测试状态
-    console.log('系统未在测试状态，收到数据字节: ' + `${packbuf.toString('hex')}`);
-    return;
-  }
   if (packbuf.readUInt8(2) === 0xD1) {
-    io.emit(util.AppEvents.parse, packbuf);
+    if (!program.isOnTest) { // 系统未在测试状态
+      console.log('系统未在测试状态，收到: ' + `${packbuf.toString('hex')}`);
+      return;
+    }
+    parseSensorData(packbuf);
   } else {
     let DirectivePack = Packet.DirectivePackParser.parse(packbuf);
     directiveAction(io, DirectivePack); // 处理各种数据指令事件
@@ -89,21 +88,33 @@ function parseData(packbuf) {
 }
 
 // 监听解析传感器数据数据， 对数据进行解析
-util._event.on(util.AppEvents.parse, (packbuf) => {
-  // 解析处理传感器数据
-  let DataPack = Packet.DataPackParser.parse(packbuf);
-  if (program.IDS.includes(DataPack.deviceID)) {
-    // 传感器ID在配置中， 对应测试中的某个仪器
-    program.cache[DataPack.deviceID.toString()] = {  // 缓存在配置中的传感器的温湿度数据
-      temp: DataPack.temp,
-      humi: DataPack.humi,
-      batt: DataPack.batt,
-    };
-  } else {
-    // 传感器ID不在配置中
-    io.emit(util.ioEvent.unconfigedDataMsg, DataPack);
+function parseSensorData(packbuf) {
+  try {
+    // 解析处理传感器数据
+    let DataPack = Packet.DataPackParser.parse(packbuf);
+    if (program.IDS.includes(DataPack.deviceID)) {
+      // 传感器ID在配置中， 对应测试中的某个仪器
+      let temp = (DataPack.temp / 100.0).toFixed(2);
+      let humi = (DataPack.humi / 100.0).toFixed(2);
+      let batt = (DataPack.batt / 1000.0);
+      if (batt >= Config.BatteryHigh) {
+        batt = 100;
+      } else if (batt <= Config.BatteryLow) {
+        batt = 0;
+      } else {
+        batt = (batt - Config.BatteryLow) / (Config.BatteryHigh - Config.BatteryLow) * 100;
+      }
+      // 缓存在配置中的传感器的温湿度数据
+      program.cache[DataPack.deviceID.toString()] = { temp, humi, batt };
+    } else {
+      // 传感器ID不在配置中， 推送未在配置中的传感器数据包到前端
+      io.emit(util.ioEvent.unconfigedDataMsg, DataPack);
+    }
+    console.log(DataPack);
+  } catch (e) {
+    console.log(e);
   }
-});
+}
 
 // 处理系统定义的指令数据包
 function directiveAction(io, pack) {
@@ -122,10 +133,8 @@ function directiveAction(io, pack) {
       let key = pack.reserv[0];
       if (key === 0x01) { // 主节点一轮上报数据的开始标志
         
-      } else if (key === 0x01) { // 主节点一轮上报数据的结束标志
+      } else if (key === 0x00) { // 主节点一轮上报数据的结束标志
         updateEquipmentData(program); // 更新程序主缓存的数据， 计算更新检测数据
-        // 更新数据到前端
-        
       }
       program.cache = {};
     }
@@ -168,37 +177,35 @@ function updateEquipmentData(program) {
         let roundhumi = IDS.map(id => equipment.data[id]['humi'][i]);
 
         arrtemp.push(util.Max(roundtemp) - util.Min(roundtemp));
-        arrhumi.push(util.Average(roundhumi) - util.Min(roundhumi));
+        arrhumi.push(util.Min(roundhumi) - util.Min(roundhumi));
       }
       evennessTemp = util.Average(arrtemp);
-      fluctuationTemp = centerSensor['temp'].length === 1 ?
-        data[centerID].temp : 
-        util.Max(centerSensor['temp']) - util.Min(centerSensor['temp']);
+      fluctuationTemp = centerSensor['temp'].length === 1 ? 0 : (util.Max(centerSensor['temp']) - util.Min(centerSensor['temp'])) / 2;
       deviationTemp = tempConfig - util.Average(centerSensor['temp']);
       
       evennessHumi = util.Average(arrhumi);
-      fluctuationHumi = centerSensor['humi'].length === 1 ?
-        data[centerID].humi : 
-        util.Max(centerSensor['humi']) - util.Min(centerSensor['humi']);
+      fluctuationHumi = centerSensor['humi'].length === 1 ? 0 : (util.Max(centerSensor['humi']) - util.Min(centerSensor['humi'])) / 2;
       deviationHumi = humiConfig - util.Average(centerSensor['humi']);
       
-      equipment.data['evennessTemp'].push(evennessTemp);
-      equipment.data['fluctuationTemp'].push(fluctuationTemp);
-      equipment.data['deviationTemp'].push(deviationTemp);
-      equipment.data['evennessHumi'].push(evennessHumi);
-      equipment.data['fluctuationHumi'].push(fluctuationHumi);
-      equipment.data['deviationHumi'].push(deviationHumi);
+      equipment.data['evennessTemp'].push(evennessTemp.toFixed(2));
+      equipment.data['fluctuationTemp'].push(fluctuationTemp.toFixed(2));
+      equipment.data['deviationTemp'].push(deviationTemp.toFixed(2));
+      equipment.data['evennessHumi'].push(evennessHumi.toFixed(2));
+      equipment.data['fluctuationHumi'].push(fluctuationHumi.toFixed(2));
+      equipment.data['deviationHumi'].push(deviationHumi.toFixed(2));
       equipment.data['time'].push(time);
+
+      // 更新数据到前端
+      io.emit(util.ioEvent.dataMsg, program.equipments);
     } else { // 仪器挂载的传感器未全部收到数据
       console.log(`仪器对应的传感器数据本次未全部收到`);
-      console.log(equipment);
     }
   });
 }
 
 // websocket server 客户端连接事件，下发连接成功提示到客户端
 io.on(util.ioEvent.connection, (socket) => {
-  io.emit(util.ioEvent.connectMsg, `you have connectted with websocket server, please waiting for message update!`);
+  io.emit(util.ioEvent.connectMsg, `Connectted with websocket server, please waiting for message update!`);
 });
 
 
@@ -278,14 +285,22 @@ app.post('/batteryConf/set', function (req, res) {
   };
   // 保存到配置文件 conf/config.json
   let saveResult = util.saveJsonToConf(confRecv, util.confPathList[1]);
+  if (saveResult) {
+    UpdateConfigBattery(Config, confRecv);
+  }
   let message = saveResult ? '电池参数修改成功！' : '电池参数修改失败，错误原因写入配置文件出错！';
   res.send(new util.ResponseTemplate(saveResult, message));
 });
 
+function UpdateConfigBattery(Config, Battery) {
+  Config.BatteryHigh = Battery.BatteryHigh;
+  Config.BatteryLow = Battery.BatteryLow;
+}
+
 // 搜索传感器 接口
 app.get('/searchSensor', (req, res) => {
   // 接收到前端请求后，调用串口发送数据到主节点(确认数据包格式)
-  let bufstr = 'AA55'+'A1'+'06'+'0B'+'00'+'00000000'+'00';
+  let bufstr = 'AA55'+'A1'+'06'+'0B'+'00'+'00000000'+'0000';
   let buf = Buffer.from(bufstr, 'hex');
   // 调用串口发送数据到主节点
   serialport.write(buf, (err) => {
@@ -435,14 +450,15 @@ app.post('/getEquipmentsByCompanyName', (req, res) => {
 // 插入测试设备数据接口
 app.post('/addEquipment', (req, res) => {
   // 接收到前端请求后，解析打包数据(构建为约定的数据格式)，将测试设备信息存储到测试设备表中， 单条记录写入
-  let equipment = req.body;
-  let eq = equipment[0];
-  if ( !(equipment instanceof Array) || equipment.length > 1) {
+  let param = req.body;
+  if ( !(param instanceof Array) || param.length > 1) {
     // 检查参数必须为数组
     res.send(new util.ResponseTemplate(false, '错误的请求！'));
     return;
   }
+  let eq = param[0];
 
+  // 数据写入结果的监测，及返回结果的调整
   let sqlQuery = `select count(*) as count from equipment where company=? and em=? and deviceName=? and deviceType=? and deviceID=?`;
   // 检查新增的仪器是否已存在
   sqliteDB.queryDataWithParam(sqlQuery, [eq.company, eq.em, eq.deviceName, eq.deviceType, eq.deviceID], (rows) => {
@@ -451,8 +467,10 @@ app.post('/addEquipment', (req, res) => {
       return;
     }
     // 数据写入结果的监测，及返回结果的调整
-    sqliteDB.insertData('insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);', equipment, (err) => {
-      if (!err) {
+    let equipment = [[eq.company, eq.em, eq.deviceName, eq.deviceType, eq.deviceID, eq.insertDate]];
+    let sqlInsert = 'insert into equipment(company, em, deviceName, deviceType, deviceID, insertDate) values (?, ?, ?, ?, ?, ?);';
+    sqliteDB.insertData(sqlInsert, equipment, (err) => {
+      if (err) {
         res.send(new util.ResponseTemplate(false, '新增仪器失败！'));
       } else {
         res.send(new util.ResponseTemplate(true, '新增仪器成功！'));

@@ -19,11 +19,11 @@ const ioEvent = {
   connectMsg: 'connectMsg',
   dataMsg: 'dataMsg',
   unconfigedDataMsg: 'unconfigedDataMsg',
-  directiveStartTest: 'directiveStartTest',
-  directiveStopTest: 'directiveStopTest',
   directiveModifyID: 'directiveModifyID',
   directiveSearchSensors: 'directiveSearchSensors',
-  systemMessage: 'systemMessage',
+  // systemMessage: 'systemMessage',
+  // directiveStartTest: 'directiveStartTest',
+  // directiveStopTest: 'directiveStopTest',
 }
 
 const CommonBaudRate = [300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 43000, 56000, 57600, 115200]
@@ -55,7 +55,7 @@ const confList = [
     path: confPathList[1],
     type: "json",
     data: {
-      SerialPortName: "COM10",
+      SerialPortName: "COM4",
       BaudRate: 115200,
       BatteryLow: 3.3,
       BatteryHigh: 7.2
@@ -172,14 +172,14 @@ function isValidNumber(obj) {
  * @return 数组长度为0时，返回 NaN
  */
 function Average(data) {
-  if (data instanceof Array) {
+  if (!data instanceof Array) {
     throw new Error('invalid input, param can only be array...');
   }
   let len = data.length;
   if (len === 0) {
     return NaN;
   }
-  let sum;
+  let sum = 0;
   for (let i = 0; i < len; i++) {
     sum += data[i];
   }
@@ -235,4 +235,6 @@ module.exports = {
   isPositiveInteger,
   CommonBaudRate,
   Average,
+  Min,
+  Max,
 }
