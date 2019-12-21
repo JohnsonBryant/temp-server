@@ -55,7 +55,8 @@ serialport.on('data', (data) => {
 const processbuf = function (program) {
   while (program.buf.length > Packet.minlen) {
     if (program.buf[0] === 0xAA && program.buf[1] === 0x55) {
-      let packlen = program.buf[2] === 0xD1 ? program.buf.readUInt8(3) + 8 : program.buf.readUInt8(3) + Packet.minlen;
+      // let packlen = program.buf[2] === 0xD1 ? program.buf.readUInt8(3) + 8 : program.buf.readUInt8(3) + Packet.minlen;
+      let packlen = program.buf.readUInt8(3) + Packet.minlen;
       if(program.buf.length < packlen){
         break;
       }
@@ -104,13 +105,13 @@ function parseSensorData(packbuf) {
       } else {
         batt = (batt - Config.BatteryLow) / (Config.BatteryHigh - Config.BatteryLow) * 100;
       }
+      batt = batt.toFixed(0);
       // 缓存在配置中的传感器的温湿度数据
       program.cache[DataPack.deviceID.toString()] = { temp, humi, batt };
     } else {
       // 传感器ID不在配置中， 推送未在配置中的传感器数据包到前端
       io.emit(util.ioEvent.unconfigedDataMsg, DataPack);
     }
-    console.log(DataPack);
   } catch (e) {
     console.log(e);
   }
@@ -127,6 +128,12 @@ function directiveAction(io, pack) {
     'A1': () => {
       // 搜索传感器应答数据，推送数据对象到前端，可获取到单个在线的传感器ID号
       io.emit(util.ioEvent.directiveSearchSensors, pack);
+    },
+    'CE': () => {
+      console.log(`收到启动应答 ${pack}`);
+    },
+    'CC': () => {
+      console.log(`收到停止应答 ${pack}`);
     },
     'CF': () => {
       // 主节点一轮上报数据到应用端的开始 / 结束信号
@@ -177,7 +184,7 @@ function updateEquipmentData(program) {
         let roundhumi = IDS.map(id => equipment.data[id]['humi'][i]);
 
         arrtemp.push(util.Max(roundtemp) - util.Min(roundtemp));
-        arrhumi.push(util.Min(roundhumi) - util.Min(roundhumi));
+        arrhumi.push(util.Max(roundhumi) - util.Min(roundhumi));
       }
       evennessTemp = util.Average(arrtemp);
       fluctuationTemp = centerSensor['temp'].length === 1 ? 0 : (util.Max(centerSensor['temp']) - util.Min(centerSensor['temp'])) / 2;
@@ -504,7 +511,8 @@ app.post('/deleteEquipment', (req, res) => {
 
 // 停止测试接口
 app.get('/stopTest', (req, res) => {
-  let buf = Buffer.from('AA55'+'CE'+'06'+'0B'+'00000000'+'000000', 'hex');
+  // let buf = Buffer.from('AA55'+'CE'+'06'+'0B'+'00000000'+'000000', 'hex');
+  let buf = Buffer.from('AA55'+'CC'+'06'+'0B'+'00000000'+'000000', 'hex');
   serialport.write(buf, (err) => {
     if (!err) {
       // reset variable program
@@ -572,7 +580,7 @@ app.post('/startTest', (req, res) => {
     return;
   }
 
-  if ( param.equipments.some((item) => !util.isValidNumber(item.config.temp) || !util.isValidNumber(item.config.humi)) ) {
+  if ( param.equipments.some((item) => !util.isValidNumber(parseFloat(item.config.temp)) || !util.isValidNumber(parseFloat(item.config.humi))) ) {
     // 检查到测试仪器配置温湿度示值存在非数值。测试仪器配置的温湿度示值有效性检查，必须为数值
     res.send(new util.ResponseTemplate(false, '测试仪器的温湿度示值输入错误，温湿度示值必须为有效数值 ！'));
     return;
@@ -580,6 +588,12 @@ app.post('/startTest', (req, res) => {
 
   // 检查当前配置为，仅接收数据测试，不通过串口向主节点下发启动测试数据指令
   if (!param.isSendding) {
+    // 更新程序的主缓存中的测试仪器信息及配置信息
+    program.isOnTest = true;
+    program.cycle = param.cycle;
+    program.isSendding = param.isSendding;
+    program.equipments = param.equipments;
+    program.IDS = param.IDS;
     res.send(new util.ResponseTemplate(false, '启动测试成功！'));
     return;
   }
